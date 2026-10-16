@@ -23,7 +23,7 @@ EXdl (External Download & Install) is a menu bar utility that makes an external 
 
 ## Why EXdl
 
-A Mac's internal storage can't be upgraded, and large apps — Xcode, Docker, Unreal Engine, Blender, games — fill it quickly. An external SSD solves the capacity problem, but macOS isn't designed to install apps onto it.
+A Mac's internal storage can't be upgraded, and large apps — Docker, Unreal Engine, Blender, games — fill it quickly. An external SSD solves the capacity problem, but macOS isn't designed to install apps onto it.
 
 | | Without EXdl | With EXdl |
 | :-- | :-- | :-- |
