@@ -48,36 +48,9 @@ if [ -f "$SCRIPT_DIR/AppIcon.icns" ]; then
     cp "$SCRIPT_DIR/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
-cat > "$CONTENTS_DIR/Info.plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>EXdl</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.erdem.EXdl</string>
-    <key>CFBundleName</key>
-    <string>EXdl</string>
-    <key>CFBundleDisplayName</key>
-    <string>EXdl</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>$VERSION</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-</dict>
-</plist>
-EOF
+# Info.plist ve yerelleştirilmiş izin açıklamaları Support/ klasöründen gelir
+sed "s/__VERSION__/$VERSION/" "$SCRIPT_DIR/Support/Info.plist.template" > "$CONTENTS_DIR/Info.plist"
+cp -R "$SCRIPT_DIR/Support/en.lproj" "$SCRIPT_DIR/Support/tr.lproj" "$RESOURCES_DIR/"
 
 # 2. Hardened Runtime ve Developer ID ile İmzala
 echo "🔏 2/5: Hardened Runtime ile kod imzalanıyor..."

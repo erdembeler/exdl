@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Combine
 import CoreServices
 
 @MainActor
@@ -16,16 +17,51 @@ final class MonitorCoordinator: ObservableObject {
 
     private var eventStream: FSEventStreamRef?
     private var promptPanelController: InstallPromptPanelController?
+    private var settingsObservers: [AnyCancellable] = []
 
     private init() {}
 
     func start() {
+        observeSwitchesThatNeedARescan()
         Task {
             await upgradeAnyLegacyLinksAndTakeSnapshot()
             setupWorkspaceVolumeNotifications()
             startFSEventsForApplicationsFolder()
             refreshMountedDMGs(enqueueIfInitial: true)
             await scanInstalledApplications()
+            await checkForUpdatesMadeWhileAway()
+        }
+    }
+
+    /// Turning a watcher back on should pick up disk images that were opened while it was off.
+    private func observeSwitchesThatNeedARescan() {
+        let settings = AppSettings.shared
+        // `@Published` fires before the value changes; the rescan only reads it after an `await`.
+        settingsObservers = [
+            settings.$isMonitoringEnabled.dropFirst().removeDuplicates().filter { $0 }
+                .sink { [weak self] _ in self?.refreshMountedDMGs(enqueueIfInitial: true) },
+            settings.$watchMountedDMGs.dropFirst().removeDuplicates().filter { $0 }
+                .sink { [weak self] _ in self?.refreshMountedDMGs(enqueueIfInitial: true) }
+        ]
+    }
+
+    /// Apps that were moved to the drive but are back as full copies in /Applications: an updater
+    /// ran while EXdl was not running. Offer the same fix as when it happens live.
+    private func checkForUpdatesMadeWhileAway() async {
+        let settings = AppSettings.shared
+        guard settings.isMonitoringEnabled, settings.protectSymlinksOnAutoUpdate else { return }
+
+        let appsURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        for (bundleName, isExternalLauncher) in previousApplicationsState where !isExternalLauncher {
+            let lower = bundleName.lowercased()
+            if lower.contains("exdl") || lower.contains("haricikur") { continue }
+            guard let managedTarget = settings.managedSymlinks[bundleName],
+                  FileManager.default.fileExists(atPath: managedTarget) else { continue }
+            await handleUpdatedApp(
+                bundleName: bundleName,
+                appURL: appsURL.appendingPathComponent(bundleName),
+                managedTarget: managedTarget
+            )
         }
     }
 
@@ -50,9 +86,11 @@ final class MonitorCoordinator: ObservableObject {
                dest.path.hasPrefix("/Volumes/"),
                FileManager.default.fileExists(atPath: dest.path) {
                 await AppInstallerService.shared.upgradeLegacySymlinkIfNeeded(at: url, externalTargetURL: dest)
-            } else if let managedPath = AppSettings.shared.managedSymlinks[bundleName],
-                      DiskImageHelper.stubTargetURL(for: url) == nil,
+            } else if DiskImageHelper.isSymbolicLink(at: url),
+                      let managedPath = AppSettings.shared.managedSymlinks[bundleName],
                       FileManager.default.fileExists(atPath: managedPath) {
+                // Only ever replace a symlink here. A real app bundle with the same name is a fresh
+                // install or an update, and replacing it would throw that version away.
                 let dest = URL(fileURLWithPath: managedPath)
                 await AppInstallerService.shared.upgradeLegacySymlinkIfNeeded(at: url, externalTargetURL: dest)
             }
@@ -96,7 +134,10 @@ final class MonitorCoordinator: ObservableObject {
                     reachable = true
                 }
                 let size = reachable ? DiskImageHelper.calculateBundleSize(at: url) : 0
+                // EXdl itself must never be offered for moving to the drive.
+                let lowerName = name.lowercased()
                 let isSystem = url.path.hasPrefix("/System/") || name == "Safari"
+                    || lowerName.contains("exdl") || lowerName.contains("haricikur")
 
                 let plistURL = url.appendingPathComponent("Contents/Info.plist")
                 let version: String?
@@ -199,7 +240,10 @@ final class MonitorCoordinator: ObservableObject {
             }
             self.mountedDMGApps = detected
             if enqueueIfInitial, AppSettings.shared.isMonitoringEnabled, AppSettings.shared.watchMountedDMGs {
-                for item in detected where !AppSettings.shared.ignoredBundleNames.contains(item.appBundleURL.lastPathComponent) {
+                let minBytes = Int64(AppSettings.shared.minimumAppSizeMB * 1_048_576.0)
+                for item in detected
+                where !AppSettings.shared.ignoredBundleNames.contains(item.appBundleURL.lastPathComponent)
+                    && item.sizeInBytes >= minBytes {
                     enqueuePrompt(item)
                 }
             }
@@ -218,8 +262,8 @@ final class MonitorCoordinator: ObservableObject {
         let appURLs = DiskImageHelper.findAppsInVolume(at: volumeURL)
         guard !appURLs.isEmpty else { return }
 
-        let isReadOnly = (try? volumeURL.resourceValues(forKeys: [.volumeIsReadOnlyKey]).volumeIsReadOnly) ?? false
-        guard dmgFilePath != nil || isReadOnly else { return }
+        // Only disk images: other read-only volumes (discs, network shares) are not ours to eject.
+        guard dmgFilePath != nil else { return }
 
         for appURL in appURLs {
             let bundleName = appURL.lastPathComponent
@@ -324,34 +368,7 @@ final class MonitorCoordinator: ObservableObject {
 
             // PÜF NOKTA 2: Daha önce Harici Diskte olan bir uygulama güncellendi ve gerçek klasöre dönüştü!
             if !isCurrentlyExternalStub && (wasExternalBefore || managedTarget != nil) && settings.protectSymlinksOnAutoUpdate {
-                let copyDone = await DiskImageHelper.waitForCopyCompletion(at: appURL)
-                guard copyDone, !DiskImageHelper.isExternalAppLink(at: appURL) else { continue }
-
-                if settings.autoMoveOnSymlinkOverwrite && settings.isExternalTargetReady {
-                    do {
-                        try await AppInstallerService.shared.moveInternalAppToExternal(appBundleURL: appURL)
-                        settings.logActivity(
-                            "\(bundleName) Otomatik Güncelleme Onarıldı",
-                            detail: "Güncellenen sürüm tekrar harici diske taşındı ve kısayol yenilendi."
-                        )
-                    } catch {
-                        settings.logActivity(
-                            "\(bundleName) Otomatik Onarım Hatası",
-                            detail: error.localizedDescription,
-                            isSuccess: false
-                        )
-                    }
-                } else {
-                    let size = await Task.detached { DiskImageHelper.calculateBundleSize(at: appURL) }.value
-                    let expectedURL = URL(fileURLWithPath: managedTarget ?? settings.externalApplicationsPath)
-                    let prompt = PendingInstallPrompt(
-                        appName: appURL.deletingPathExtension().lastPathComponent,
-                        appBundleURL: appURL,
-                        sizeInBytes: size,
-                        source: .symlinkOverwrittenByUpdate(expectedExternalURL: expectedURL)
-                    )
-                    enqueuePrompt(prompt)
-                }
+                await handleUpdatedApp(bundleName: bundleName, appURL: appURL, managedTarget: managedTarget)
                 continue
             }
 
@@ -381,6 +398,42 @@ final class MonitorCoordinator: ObservableObject {
         await scanInstalledApplications()
     }
 
+    /// An app that EXdl had moved to the drive is a full copy in /Applications again (an updater replaced
+    /// the launcher). Move it back automatically or ask, depending on the setting.
+    private func handleUpdatedApp(bundleName: String, appURL: URL, managedTarget: String?) async {
+        let settings = AppSettings.shared
+        if settings.ignoredBundleNames.contains(bundleName) { return }
+
+        let copyDone = await DiskImageHelper.waitForCopyCompletion(at: appURL)
+        guard copyDone, !DiskImageHelper.isExternalAppLink(at: appURL) else { return }
+
+        if settings.autoMoveOnSymlinkOverwrite && settings.isExternalTargetReady {
+            do {
+                try await AppInstallerService.shared.moveInternalAppToExternal(appBundleURL: appURL)
+                settings.logActivity(
+                    tr("{app} update restored automatically", ["app": bundleName]),
+                    detail: tr("The updated version was moved back to the external drive and the launcher was recreated.")
+                )
+            } catch {
+                settings.logActivity(
+                    tr("{app} could not be restored automatically", ["app": bundleName]),
+                    detail: error.localizedDescription,
+                    isSuccess: false
+                )
+            }
+        } else {
+            let size = await Task.detached { DiskImageHelper.calculateBundleSize(at: appURL) }.value
+            let expectedURL = URL(fileURLWithPath: managedTarget ?? settings.externalApplicationsPath)
+            let prompt = PendingInstallPrompt(
+                appName: appURL.deletingPathExtension().lastPathComponent,
+                appBundleURL: appURL,
+                sizeInBytes: size,
+                source: .symlinkOverwrittenByUpdate(expectedExternalURL: expectedURL)
+            )
+            enqueuePrompt(prompt)
+        }
+    }
+
     // MARK: - 4) Kurulum Sorusu Penceresi Yönetimi
 
     func enqueuePrompt(_ prompt: PendingInstallPrompt) {
@@ -400,6 +453,15 @@ final class MonitorCoordinator: ObservableObject {
         if pendingPrompts.isEmpty {
             InstallPromptPanelController.shared.close()
         }
+    }
+
+    /// The user turned a prompt down (Cancel or Ignore). Declining an update prompt means "keep this
+    /// version on the internal disk", so the app is no longer treated as managed and is not offered again.
+    func declinePrompt(_ prompt: PendingInstallPrompt, ignoreFuture: Bool) {
+        if case .symlinkOverwrittenByUpdate = prompt.source {
+            AppSettings.shared.unregisterManagedSymlink(appBundleName: prompt.appBundleURL.lastPathComponent)
+        }
+        dismissPrompt(prompt, ignoreFuture: ignoreFuture)
     }
 
     func showPromptWindowIfNeeded() {

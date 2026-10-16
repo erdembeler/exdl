@@ -3,11 +3,22 @@ import SwiftUI
 import AppKit
 import ServiceManagement
 
+/// State of the "Launch at Login" item, as reported by macOS.
+enum LaunchAtLoginStatus: Equatable {
+    case disabled
+    case enabled
+    /// Registered, but the user still has to approve it in System Settings → Login Items.
+    case requiresApproval
+    /// macOS cannot find the app bundle (for example when it runs from a disk image).
+    case unavailable
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
-    @Published var isLaunchAtLoginEnabled: Bool = false
+    @Published var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
+    @Published var launchAtLoginError: String?
 
     @Published var isMonitoringEnabled: Bool {
         didSet { UserDefaults.standard.set(isMonitoringEnabled, forKey: "isMonitoringEnabled") }
@@ -90,7 +101,16 @@ final class AppSettings: ObservableObject {
         self.ignoredBundleNames = Set(ignoredArray)
 
         refreshExternalDrives()
-        checkLaunchAtLoginStatus()
+        refreshLaunchAtLogin()
+
+        // The user can switch the login item off in System Settings; pick that up when we come back to the front.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshLaunchAtLogin() }
+        }
     }
 
     var externalApplicationsURL: URL? {
@@ -102,7 +122,7 @@ final class AppSettings: ObservableObject {
         if let drive = selectedExternalDriveInfo {
             return drive.name
         }
-        guard let targetURL = externalApplicationsURL else { return "Harici Disk" }
+        guard let targetURL = externalApplicationsURL else { return tr("External Drive") }
         let components = targetURL.pathComponents
         if components.count >= 3 && components[1] == "Volumes" {
             return components[2]
@@ -127,30 +147,49 @@ final class AppSettings: ObservableObject {
         return FileManager.default.fileExists(atPath: targetURL.deletingLastPathComponent().path)
     }
 
-    func checkLaunchAtLoginStatus() {
-        if #available(macOS 13.0, *) {
-            isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    // MARK: - Launch at login
+
+    var isLaunchAtLoginEnabled: Bool {
+        launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval
+    }
+
+    /// Login items are only reliable for apps that live in /Applications.
+    var isRunningFromApplications: Bool {
+        Bundle.main.bundlePath.hasPrefix("/Applications/")
+    }
+
+    func refreshLaunchAtLogin() {
+        switch SMAppService.mainApp.status {
+        case .enabled: launchAtLoginStatus = .enabled
+        case .requiresApproval: launchAtLoginStatus = .requiresApproval
+        case .notRegistered: launchAtLoginStatus = .disabled
+        case .notFound: launchAtLoginStatus = .unavailable
+        @unknown default: launchAtLoginStatus = .disabled
         }
     }
 
     func setLaunchAtLogin(enabled: Bool) {
-        if #available(macOS 13.0, *) {
-            do {
-                if enabled {
-                    if SMAppService.mainApp.status != .enabled {
-                        try SMAppService.mainApp.register()
-                    }
-                } else {
-                    if SMAppService.mainApp.status == .enabled {
-                        try SMAppService.mainApp.unregister()
-                    }
+        launchAtLoginError = nil
+        do {
+            if enabled {
+                if SMAppService.mainApp.status != .enabled {
+                    try SMAppService.mainApp.register()
                 }
-                isLaunchAtLoginEnabled = enabled
-            } catch {
-                logActivity("Girişte Başlatma Hatası", detail: error.localizedDescription, isSuccess: false)
+            } else if SMAppService.mainApp.status != .notRegistered {
+                try SMAppService.mainApp.unregister()
             }
+        } catch {
+            launchAtLoginError = error.localizedDescription
+            logActivity(tr("Launch at Login Error"), detail: error.localizedDescription, isSuccess: false)
         }
+        refreshLaunchAtLogin()
     }
+
+    func openLoginItemsSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
+    // MARK: - Activity log and managed launchers
 
     func logActivity(_ title: String, detail: String, isSuccess: Bool = true) {
         let item = ActivityLogItem(timestamp: Date(), title: title, detail: detail, isSuccess: isSuccess)
@@ -173,6 +212,7 @@ final class AppSettings: ObservableObject {
         let keys: [URLResourceKey] = [
             .volumeNameKey,
             .volumeIsInternalKey,
+            .volumeIsLocalKey,
             .volumeIsReadOnlyKey,
             .volumeIsBrowsableKey,
             .volumeAvailableCapacityKey,
@@ -210,6 +250,8 @@ final class AppSettings: ObservableObject {
             guard let values = try? url.resourceValues(forKeys: Set(keys)) else { continue }
             let isReadOnly = values.volumeIsReadOnly ?? false
             if isReadOnly { continue }
+            // App bundles do not belong on network shares.
+            if values.volumeIsLocal == false { continue }
 
             guard url.path.hasPrefix("/Volumes/") else { continue }
 

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>EXdl</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.erdem.EXdl</string>
+    <key>CFBundleName</key>
+    <string>EXdl</string>
+    <key>CFBundleDisplayName</key>
+    <string>EXdl</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>tr</string>
+    </array>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 Erdem Beler. Released under the MIT License.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>EXdl copies apps to your external drive and keeps launchers that point to them.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>EXdl can move a disk image from your Downloads folder to the Trash after installing from it, if you turn that option on.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>EXdl can move a disk image from your Desktop to the Trash after installing from it, if you turn that option on.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>EXdl can move a disk image from your Documents folder to the Trash after installing from it, if you turn that option on.</string>
+</dict>
+</plist>

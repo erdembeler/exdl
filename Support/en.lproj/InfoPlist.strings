@@ -1,0 +1,4 @@
+"NSRemovableVolumesUsageDescription" = "EXdl copies apps to your external drive and keeps launchers that point to them.";
+"NSDownloadsFolderUsageDescription" = "EXdl can move a disk image from your Downloads folder to the Trash after installing from it, if you turn that option on.";
+"NSDesktopFolderUsageDescription" = "EXdl can move a disk image from your Desktop to the Trash after installing from it, if you turn that option on.";
+"NSDocumentsFolderUsageDescription" = "EXdl can move a disk image from your Documents folder to the Trash after installing from it, if you turn that option on.";

@@ -10,13 +10,13 @@ enum AppInstallError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .externalDriveNotConfigured:
-            return "Henüz bir harici disk / klasör seçilmedi. Lütfen Ayarlar sekmesinden hedef harici diski seçin."
+            return tr("No external drive or folder has been chosen yet. Pick a target drive in Settings.")
         case .externalDriveNotConnected(let path):
-            return "Seçili harici disk şu anda takılı değil (\(path)). Lütfen diski bağlayın."
+            return tr("The selected external drive is not connected ({path}). Please connect it.", ["path": path])
         case .sourceAppNotFound(let path):
-            return "Kaynak uygulama bulunamadı: \(path)"
+            return tr("The source app could not be found: {path}", ["path": path])
         case .operationFailed(let reason):
-            return "İşlem başarısız oldu: \(reason)"
+            return tr("The operation failed: {reason}", ["reason": reason])
         }
     }
 }
@@ -57,7 +57,7 @@ final class AppInstallerService: ObservableObject {
         let bundleName = appBundleURL.lastPathComponent
         activeOperations.insert(bundleName)
         isBusy = true
-        statusMessage = "\(bundleName) doğrudan harici diske kopyalanıyor..."
+        statusMessage = tr("Copying {app} to the external drive…", ["app": bundleName])
 
         defer {
             isBusy = false
@@ -78,12 +78,8 @@ final class AppInstallerService: ObservableObject {
                 try fm.createDirectory(at: externalAppsDir, withIntermediateDirectories: true)
             }
 
-            if fm.fileExists(atPath: destinationExternalAppURL.path) || DiskImageHelper.isSymbolicLink(at: destinationExternalAppURL) {
-                try fm.removeItem(at: destinationExternalAppURL)
-            }
-
             // Doğrudan DMG'den harici diske kopyala
-            try Self.runDittoCopy(from: appBundleURL, to: destinationExternalAppURL)
+            try Self.copyReplacing(from: appBundleURL, to: destinationExternalAppURL, useAdminFallback: false)
 
             // Dahili /Applications klasörüne macOS Apps.app / Launchpad / Spotlight uyumlu Akıllı Kısayol Paketi oluştur
             try Self.createSmartAppStubInApplications(
@@ -97,12 +93,12 @@ final class AppInstallerService: ObservableObject {
             externalDestinationPath: destinationExternalAppURL.path
         )
         settings.logActivity(
-            "\(bundleName) Harici Diske Kuruldu",
-            detail: "DMG → \(destinationExternalAppURL.path) (Kısayol: /Applications/\(bundleName))"
+            tr("{app} installed on the external drive", ["app": bundleName]),
+            detail: tr("Disk image → {path} (launcher: /Applications/{app})", ["path": destinationExternalAppURL.path, "app": bundleName])
         )
 
         if settings.autoEjectDMGAfterInstall {
-            statusMessage = "DMG disk imajı çıkarılıyor..."
+            statusMessage = tr("Ejecting the disk image…")
             await ejectDMGAndOptionallyTrash(volumeURL: volumeURL, dmgImagePath: dmgImagePath)
         }
     }
@@ -119,7 +115,7 @@ final class AppInstallerService: ObservableObject {
 
         activeOperations.insert(bundleName)
         isBusy = true
-        statusMessage = "\(bundleName) dahili diske (/Applications) kopyalanıyor..."
+        statusMessage = tr("Copying {app} to the internal disk (/Applications)…", ["app": bundleName])
 
         defer {
             isBusy = false
@@ -131,16 +127,12 @@ final class AppInstallerService: ObservableObject {
         }
 
         try await Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            if fm.fileExists(atPath: internalAppURL.path) || DiskImageHelper.isSymbolicLink(at: internalAppURL) {
-                try Self.removeItemWithFallback(at: internalAppURL)
-            }
-            try Self.runDittoCopy(from: appBundleURL, to: internalAppURL)
+            try Self.copyReplacing(from: appBundleURL, to: internalAppURL, useAdminFallback: true)
         }.value
 
         settings.unregisterManagedSymlink(appBundleName: bundleName)
         settings.logActivity(
-            "\(bundleName) Dahili Diske Kuruldu",
+            tr("{app} installed on the internal disk", ["app": bundleName]),
             detail: "/Applications/\(bundleName)"
         )
 
@@ -165,7 +157,7 @@ final class AppInstallerService: ObservableObject {
         let bundleName = appBundleURL.lastPathComponent
         activeOperations.insert(bundleName)
         isBusy = true
-        statusMessage = "\(bundleName) harici diske taşınıyor ve kısayol oluşturuluyor..."
+        statusMessage = tr("Moving {app} to the external drive and creating a launcher…", ["app": bundleName])
 
         defer {
             isBusy = false
@@ -185,12 +177,8 @@ final class AppInstallerService: ObservableObject {
                 try fm.createDirectory(at: externalAppsDir, withIntermediateDirectories: true)
             }
 
-            if fm.fileExists(atPath: destinationExternalAppURL.path) || DiskImageHelper.isSymbolicLink(at: destinationExternalAppURL) {
-                try fm.removeItem(at: destinationExternalAppURL)
-            }
-
             // Önce harici diske tam kopyala
-            try Self.runDittoCopy(from: appBundleURL, to: destinationExternalAppURL)
+            try Self.copyReplacing(from: appBundleURL, to: destinationExternalAppURL, useAdminFallback: false)
 
             // Kopyalama başarılıysa dahili diskteki asıl klasörü sil ve yerine Akıllı Kısayol Paketi koy
             try Self.createSmartAppStubInApplications(
@@ -204,8 +192,8 @@ final class AppInstallerService: ObservableObject {
             externalDestinationPath: destinationExternalAppURL.path
         )
         settings.logActivity(
-            "\(bundleName) Harici Diske Taşındı",
-            detail: "Hedef: \(destinationExternalAppURL.path)"
+            tr("{app} moved to the external drive", ["app": bundleName]),
+            detail: tr("Destination: {path}", ["path": destinationExternalAppURL.path])
         )
     }
 
@@ -223,7 +211,7 @@ final class AppInstallerService: ObservableObject {
 
         activeOperations.insert(bundleName)
         isBusy = true
-        statusMessage = "\(bundleName) dahili diske geri taşınıyor..."
+        statusMessage = tr("Moving {app} back to the internal disk…", ["app": bundleName])
 
         defer {
             isBusy = false
@@ -235,16 +223,15 @@ final class AppInstallerService: ObservableObject {
         }
 
         try await Task.detached(priority: .userInitiated) {
-            try Self.removeItemWithFallback(at: internalAppURL)
-            try Self.runDittoCopy(from: externalTargetURL, to: internalAppURL)
+            try Self.copyReplacing(from: externalTargetURL, to: internalAppURL, useAdminFallback: true)
             try? FileManager.default.removeItem(at: externalTargetURL)
             Self.registerAndIndexApp(at: internalAppURL)
         }.value
 
         AppSettings.shared.unregisterManagedSymlink(appBundleName: bundleName)
         AppSettings.shared.logActivity(
-            "\(bundleName) Dahili Diske Geri Alındı",
-            detail: "/Applications/\(bundleName) artık dahili diskte."
+            tr("{app} restored to the internal disk", ["app": bundleName]),
+            detail: tr("/Applications/{app} now lives on the internal disk.", ["app": bundleName])
         )
     }
 
@@ -276,16 +263,24 @@ final class AppInstallerService: ObservableObject {
             if shouldTrash, let dmgPath = dmgImagePath, !dmgPath.isEmpty {
                 let dmgURL = URL(fileURLWithPath: dmgPath)
                 if FileManager.default.fileExists(atPath: dmgURL.path) {
-                    try? FileManager.default.trashItem(at: dmgURL, resultingItemURL: nil)
-                    AppSettings.shared.logActivity(
-                        "DMG Temizlendi",
-                        detail: "\(dmgURL.lastPathComponent) Çöp Kutusu'na taşındı."
-                    )
+                    do {
+                        try FileManager.default.trashItem(at: dmgURL, resultingItemURL: nil)
+                        AppSettings.shared.logActivity(
+                            tr("Disk image removed"),
+                            detail: tr("{file} was moved to the Trash.", ["file": dmgURL.lastPathComponent])
+                        )
+                    } catch {
+                        AppSettings.shared.logActivity(
+                            tr("Could not move the disk image to the Trash"),
+                            detail: error.localizedDescription,
+                            isSuccess: false
+                        )
+                    }
                 }
             }
         } catch {
             AppSettings.shared.logActivity(
-                "DMG Çıkarılamadı",
+                tr("Could not eject the disk image"),
                 detail: error.localizedDescription,
                 isSuccess: false
             )
@@ -304,7 +299,7 @@ final class AppInstallerService: ObservableObject {
 
         if process.terminationStatus != 0 {
             let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-            let errMsg = String(data: errData, encoding: .utf8) ?? "ditto kopyalama hatası"
+            let errMsg = String(data: errData, encoding: .utf8) ?? tr("Copy failed")
             throw AppInstallError.operationFailed(errMsg)
         }
     }
@@ -321,16 +316,13 @@ final class AppInstallerService: ObservableObject {
 
         guard let plistData = try? Data(contentsOf: sourceInfoPlistURL),
               var infoDict = (try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil)) as? [String: Any] else {
-            throw AppInstallError.operationFailed("Hedef uygulamanın Info.plist dosyası okunamadı.")
-        }
-
-        // 2. /Applications içindeki eski klasörü veya symlink'i temizle
-        if fm.fileExists(atPath: stubURL.path) || DiskImageHelper.isSymbolicLink(at: stubURL) {
-            try removeItemWithFallback(at: stubURL)
+            throw AppInstallError.operationFailed(tr("The app's Info.plist could not be read."))
         }
 
         // 3. Geçici dizinde Smart App Stub paketini hazırla
+        // (The existing app in /Applications is only replaced at the very end, so nothing is lost if a step here fails.)
         let tempStubURL = fm.temporaryDirectory.appendingPathComponent("EXdlStub_\(UUID().uuidString).app")
+        defer { try? fm.removeItem(at: tempStubURL) }
         let stubContentsURL = tempStubURL.appendingPathComponent("Contents", isDirectory: true)
         let stubMacOSURL = stubContentsURL.appendingPathComponent("MacOS", isDirectory: true)
         let stubResourcesURL = stubContentsURL.appendingPathComponent("Resources", isDirectory: true)
@@ -390,15 +382,26 @@ final class AppInstallerService: ObservableObject {
             try fm.copyItem(at: bundledLauncherURL, to: stubExecutableURL)
         } else {
             // Yedek olarak hızlı zsh başlatıcı betiği yaz
+            // Text lands inside an AppleScript string that sits inside a single-quoted shell string.
+            func escaped(_ text: String) -> String {
+                text.replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "'", with: "'\\''")
+            }
             let escapedTarget = destinationURL.path.replacingOccurrences(of: "\"", with: "\\\"")
-            let appTitle = stubURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "\"", with: "\\\"")
+            let appTitle = stubURL.deletingPathExtension().lastPathComponent
+            let alertTitle = escaped(tr("External Drive Not Connected"))
+            let alertMessage = escaped(tr(
+                "{app} is installed on your external drive ({path}).\n\nConnect the drive to your Mac to open it.",
+                ["app": appTitle, "path": destinationURL.path]
+            ))
             let script = """
             #!/bin/zsh
             TARGET="\(escapedTarget)"
             if [ -d "$TARGET" ]; then
                 /usr/bin/open -a "$TARGET" "$@"
             else
-                /usr/bin/osascript -e 'display alert "Harici Disk Takılı Değil" message "\(appTitle) uygulaması harici diskinizde (\(escapedTarget)) kurulu. Uygulamayı başlatmak için lütfen harici diskinizi Mac'\''inize bağlayın." as warning'
+                /usr/bin/osascript -e 'display alert "\(alertTitle)" message "\(alertMessage)" as warning'
             fi
             """
             try script.write(to: stubExecutableURL, atomically: true, encoding: .utf8)
@@ -412,14 +415,11 @@ final class AppInstallerService: ObservableObject {
         try? signProc.run()
         signProc.waitUntilExit()
 
-        // 8. /Applications içine taşı
-        do {
-            try fm.moveItem(at: tempStubURL, to: stubURL)
-        } catch {
-            let escapedTemp = tempStubURL.path.replacingOccurrences(of: "'", with: "'\\''")
-            let escapedStub = stubURL.path.replacingOccurrences(of: "'", with: "'\\''")
-            try runAdminShellCommand("/bin/rm -rf '\(escapedStub)' && /bin/mv '\(escapedTemp)' '\(escapedStub)'")
+        // 8. Eski klasörü veya symlink'i temizle ve /Applications içine taşı
+        if fm.fileExists(atPath: stubURL.path) || DiskImageHelper.isSymbolicLink(at: stubURL) {
+            try removeItemWithFallback(at: stubURL)
         }
+        try moveItem(from: tempStubURL, to: stubURL, useAdminFallback: true)
 
         // 9. LaunchServices ve Spotlight (Apps.app) indeksini anında güncelle
         registerAndIndexApp(at: stubURL)
@@ -451,6 +451,38 @@ final class AppInstallerService: ObservableObject {
         }
     }
 
+    nonisolated private static func moveItem(from source: URL, to destination: URL, useAdminFallback: Bool) throws {
+        do {
+            try FileManager.default.moveItem(at: source, to: destination)
+        } catch {
+            guard useAdminFallback else { throw error }
+            let escapedSource = source.path.replacingOccurrences(of: "'", with: "'\\''")
+            let escapedDestination = destination.path.replacingOccurrences(of: "'", with: "'\\''")
+            try runAdminShellCommand("/bin/rm -rf '\(escapedDestination)' && /bin/mv '\(escapedSource)' '\(escapedDestination)'")
+        }
+    }
+
+    /// Copies `source` next to `destination` under a temporary name and swaps it in only after the copy
+    /// succeeded, so a failed or interrupted copy never destroys the item that is already there.
+    nonisolated private static func copyReplacing(from source: URL, to destination: URL, useAdminFallback: Bool) throws {
+        let fm = FileManager.default
+        let temporary = destination.deletingLastPathComponent().appendingPathComponent(".exdl-\(UUID().uuidString).tmp")
+        do {
+            try runDittoCopy(from: source, to: temporary)
+            if fm.fileExists(atPath: destination.path) || DiskImageHelper.isSymbolicLink(at: destination) {
+                if useAdminFallback {
+                    try removeItemWithFallback(at: destination)
+                } else {
+                    try fm.removeItem(at: destination)
+                }
+            }
+            try moveItem(from: temporary, to: destination, useAdminFallback: useAdminFallback)
+        } catch {
+            try? fm.removeItem(at: temporary)
+            throw error
+        }
+    }
+
     nonisolated private static func runAdminShellCommand(_ command: String) throws {
         let appleScriptSource = "do shell script \"\(command.replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
         let process = Process()
@@ -462,19 +494,11 @@ final class AppInstallerService: ObservableObject {
         process.waitUntilExit()
         if process.terminationStatus != 0 {
             let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-            let errStr = String(data: errData, encoding: .utf8) ?? "Yönetici izni reddedildi."
+            var errStr = String(data: errData, encoding: .utf8) ?? tr("Administrator permission was denied.")
+            if errStr.localizedCaseInsensitiveContains("not permitted") {
+                errStr += "\n" + tr("macOS blocked the change. Allow EXdl under System Settings → Privacy & Security → App Management, then try again.")
+            }
             throw AppInstallError.operationFailed(errStr)
-        }
-    }
-
-    nonisolated static func hasApplicationsWriteAccess() -> Bool {
-        FileManager.default.isWritableFile(atPath: "/Applications")
-    }
-
-    @MainActor
-    static func openFullDiskAccessSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-            NSWorkspace.shared.open(url)
         }
     }
 }

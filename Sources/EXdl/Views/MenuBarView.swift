@@ -4,6 +4,7 @@ import AppKit
 struct MenuBarView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = MonitorCoordinator.shared
+    @ObservedObject private var language = LanguageManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -16,6 +17,7 @@ struct MenuBarView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .labelsHidden()
+                    .help(tr("Automatic Monitoring"))
             }
 
             // 2. Harici Disk Durum Kartı
@@ -29,11 +31,11 @@ struct MenuBarView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Text(settings.isExternalTargetReady ? settings.selectedExternalDriveName : "Harici Disk Yok")
+                        Text(settings.isExternalTargetReady ? settings.selectedExternalDriveName : tr("No External Drive"))
                             .font(.system(size: 12.5, weight: .semibold))
                         Spacer()
                         if let drive = settings.selectedExternalDriveInfo {
-                            Text("\(drive.formattedAvailable) boş")
+                            Text(tr("{size} free", ["size": drive.formattedAvailable]))
                                 .font(.system(size: 11).monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
@@ -45,11 +47,11 @@ struct MenuBarView: View {
                     }
 
                     HStack {
-                        Text("\(coordinator.externalAppsCount) harici uygulama")
+                        Text(tr("External apps: {count}", ["count": String(coordinator.externalAppsCount)]))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(ByteCountFormatter.string(fromByteCount: coordinator.totalSavedInternalBytes, countStyle: .file)) kazanıldı")
+                        Text(tr("{size} saved", ["size": ByteCountFormatter.string(fromByteCount: coordinator.totalSavedInternalBytes, countStyle: .file)]))
                             .font(.system(size: 11, weight: .medium).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -75,7 +77,7 @@ struct MenuBarView: View {
                             .resizable()
                             .frame(width: 24, height: 24)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(firstPrompt.appName) kurulum bekliyor")
+                            Text(tr("{app} is waiting to be installed", ["app": firstPrompt.appName]))
                                 .font(.caption.weight(.semibold))
                             Text(firstPrompt.formattedSize)
                                 .font(.caption2.monospacedDigit())
@@ -97,22 +99,26 @@ struct MenuBarView: View {
 
             // Alt Menü Satırları
             VStack(spacing: 2) {
-                MenuRowButton(title: "Sürükle-Bırak Demo Penceresi…", icon: "hand.draw") {
-                    InstallPromptPanelController.shared.showPromptWindow()
-                }
-
-                MenuRowButton(title: "Uygulamaları Yönet…", icon: "square.grid.2x2") {
+                MenuRowButton(title: tr("Manage Apps…"), icon: "square.grid.2x2") {
                     DashboardWindowController.shared.showWindow(selectedTab: .applications)
                 }
 
-                MenuRowButton(title: "Ayarlar…", icon: "gearshape") {
+                MenuRowButton(title: tr("Settings…"), icon: "gearshape") {
                     DashboardWindowController.shared.showWindow(selectedTab: .settings)
+                }
+
+                MenuRowButton(title: tr("Welcome Guide…"), icon: "sparkles") {
+                    OnboardingWindowController.shared.show(restart: true)
+                }
+
+                MenuRowButton(title: tr("Star on GitHub"), icon: "star") {
+                    NSWorkspace.shared.open(AppInfo.repositoryURL)
                 }
 
                 Divider()
                     .padding(.vertical, 4)
 
-                MenuRowButton(title: "EXdl'den Çık", icon: "power") {
+                MenuRowButton(title: tr("Quit EXdl"), icon: "power") {
                     NSApplication.shared.terminate(nil)
                 }
             }

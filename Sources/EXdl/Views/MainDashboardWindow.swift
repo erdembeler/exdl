@@ -2,11 +2,19 @@ import SwiftUI
 import AppKit
 
 enum DashboardTab: String, CaseIterable, Identifiable {
-    case applications = "Uygulamalar"
-    case mountedDMGs = "Disk İmajları"
-    case settings = "Ayarlar"
+    case applications
+    case mountedDMGs
+    case settings
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .applications: return tr("Apps")
+        case .mountedDMGs: return tr("Disk Images")
+        case .settings: return tr("Settings")
+        }
+    }
 
     var icon: String {
         switch self {
@@ -45,13 +53,16 @@ final class DashboardWindowController: ObservableObject {
             win.toolbarStyle = .unified
             win.minSize = NSSize(width: 680, height: 460)
             win.contentViewController = hostingController
+            // The hosting controller shrinks the window to the SwiftUI minimum; ask for the intended size.
+            win.setContentSize(NSSize(width: 780, height: 540))
             win.center()
             win.isReleasedWhenClosed = false
+            AppPresence.track(win)
             self.window = win
         }
 
         AppSettings.shared.refreshExternalDrives()
-        NSApp.activate(ignoringOtherApps: true)
+        AppPresence.windowWillShow()
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
     }
@@ -61,12 +72,13 @@ struct MainDashboardView: View {
     @ObservedObject private var windowController = DashboardWindowController.shared
     @ObservedObject private var coordinator = MonitorCoordinator.shared
     @ObservedObject private var installer = AppInstallerService.shared
+    @ObservedObject private var language = LanguageManager.shared
 
     var body: some View {
         NavigationSplitView {
             List(DashboardTab.allCases, selection: $windowController.selectedTab) { tab in
                 HStack {
-                    Label(tab.rawValue, systemImage: tab.icon)
+                    Label(tab.title, systemImage: tab.icon)
                     Spacer()
                     if tab == .mountedDMGs && !coordinator.mountedDMGApps.isEmpty {
                         Text("\(coordinator.mountedDMGApps.count)")
@@ -115,11 +127,20 @@ struct ApplicationsManagerTabView: View {
     @ObservedObject private var coordinator = MonitorCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var installer = AppInstallerService.shared
+    @ObservedObject private var language = LanguageManager.shared
 
-    enum AppFilter: String, CaseIterable {
-        case all = "Tümü"
-        case externalOnly = "Harici"
-        case internalOnly = "Dahili"
+    enum AppFilter: CaseIterable {
+        case all
+        case externalOnly
+        case internalOnly
+
+        var title: String {
+            switch self {
+            case .all: return tr("All")
+            case .externalOnly: return tr("External")
+            case .internalOnly: return tr("Internal")
+            }
+        }
     }
 
     @State private var filter: AppFilter = .all
@@ -153,13 +174,13 @@ struct ApplicationsManagerTabView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(settings.isExternalTargetReady ? settings.selectedExternalDriveName : "Harici Disk Seçilmedi")
+                            Text(settings.isExternalTargetReady ? settings.selectedExternalDriveName : tr("No External Drive Selected"))
                                 .font(.system(size: 14, weight: .semibold))
 
                             Spacer()
 
                             if let drive = settings.selectedExternalDriveInfo {
-                                Text("\(drive.formattedTotal) içinde \(drive.formattedAvailable) kullanılabilir")
+                                Text(tr("{free} available of {total}", ["free": drive.formattedAvailable, "total": drive.formattedTotal]))
                                     .font(.system(size: 11.5).monospacedDigit())
                                     .foregroundStyle(.secondary)
                             }
@@ -179,7 +200,7 @@ struct ApplicationsManagerTabView: View {
                         }
 
                         HStack {
-                            Text("Harici diskteki \(coordinator.externalAppsCount) uygulama sayesinde dahili SSD'de \(ByteCountFormatter.string(fromByteCount: coordinator.totalSavedInternalBytes, countStyle: .file)) yer açıldı.")
+                            Text(savedSpaceText)
                                 .font(.system(size: 11.5))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -197,14 +218,14 @@ struct ApplicationsManagerTabView: View {
                         Text(alertError)
                             .font(.caption)
                         Spacer()
-                        Button("Kapat") { self.alertError = nil }
+                        Button(tr("Dismiss")) { self.alertError = nil }
                             .controlSize(.small)
                     }
                 }
             }
 
             // 2. Uygulama Listesi (Apple Grouped Form Satırları)
-            Section("Uygulamalar (\(filteredApps.count))") {
+            Section(tr("Apps ({count})", ["count": String(filteredApps.count)])) {
                 ForEach(filteredApps) { app in
                     HStack(spacing: 12) {
                         Image(nsImage: app.icon)
@@ -218,11 +239,13 @@ struct ApplicationsManagerTabView: View {
                                 .font(.system(size: 13, weight: .medium))
 
                             if app.isSymlink {
-                                Text(app.isTargetReachable ? "\(app.targetVolumeName ?? "Harici Disk") · Kısayol" : "Disk Takılı Değil")
+                                Text(app.isTargetReachable
+                                     ? tr("{drive} · Launcher", ["drive": app.targetVolumeName ?? tr("External Drive")])
+                                     : tr("Drive Not Connected"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(app.isTargetReachable ? Color.accentColor : Color.orange)
                             } else {
-                                Text("Dahili Disk")
+                                Text(tr("Internal Disk"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                             }
@@ -236,13 +259,13 @@ struct ApplicationsManagerTabView: View {
                             .padding(.trailing, 4)
 
                         if app.isSymlink {
-                            Button("Dahiliye Al…") {
+                            Button(tr("Move to Internal…")) {
                                 restoreApp(app)
                             }
                             .controlSize(.small)
                             .disabled(installer.isBusy || !app.isTargetReachable)
                         } else {
-                            Button("Hariciye Taşı…") {
+                            Button(tr("Move to External…")) {
                                 moveAppToExternal(app)
                             }
                             .controlSize(.small)
@@ -254,12 +277,12 @@ struct ApplicationsManagerTabView: View {
             }
         }
         .formStyle(.grouped)
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Ara")
+        .searchable(text: $searchText, placement: .toolbar, prompt: tr("Search"))
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("Görünüm", selection: $filter) {
+                Picker(tr("View"), selection: $filter) {
                     ForEach(AppFilter.allCases, id: \.self) { item in
-                        Text(item.rawValue).tag(item)
+                        Text(item.title).tag(item)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -272,10 +295,19 @@ struct ApplicationsManagerTabView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .help("Yenile")
+                .help(tr("Refresh"))
                 .disabled(coordinator.isScanningApps)
             }
         }
+    }
+
+    private var savedSpaceText: String {
+        let count = coordinator.externalAppsCount
+        let size = ByteCountFormatter.string(fromByteCount: coordinator.totalSavedInternalBytes, countStyle: .file)
+        if count == 1 {
+            return tr("1 app on your external drive frees up {size} on the internal SSD.", ["size": size])
+        }
+        return tr("{count} apps on your external drive free up {size} on the internal SSD.", ["count": String(count), "size": size])
     }
 
     private func moveAppToExternal(_ app: InstalledAppInfo) {
@@ -307,6 +339,7 @@ struct ApplicationsManagerTabView: View {
 
 struct MountedDMGsTabView: View {
     @ObservedObject private var coordinator = MonitorCoordinator.shared
+    @ObservedObject private var language = LanguageManager.shared
 
     var body: some View {
         Form {
@@ -316,9 +349,9 @@ struct MountedDMGsTabView: View {
                         Image(systemName: "opticaldiscdrive")
                             .font(.system(size: 28, weight: .light))
                             .foregroundStyle(.secondary)
-                        Text("Bağlı Disk İmajı Yok")
+                        Text(tr("No Disk Images Mounted"))
                             .font(.system(size: 13, weight: .medium))
-                        Text("Bir .dmg dosyası açtığınızda burada listelenir ve kurulum penceresi otomatik olarak açılır.")
+                        Text(tr("When you open a .dmg file it is listed here and the install window opens automatically."))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -327,7 +360,7 @@ struct MountedDMGsTabView: View {
                     .padding(.vertical, 28)
                 }
             } else {
-                Section("Açık Disk İmajları") {
+                Section(tr("Mounted Disk Images")) {
                     ForEach(coordinator.mountedDMGApps) { dmgApp in
                         HStack(spacing: 12) {
                             Image(nsImage: dmgApp.icon)
@@ -349,7 +382,7 @@ struct MountedDMGsTabView: View {
                                 .font(.system(size: 12).monospacedDigit())
                                 .foregroundStyle(.secondary)
 
-                            Button("Kur…") {
+                            Button(tr("Install…")) {
                                 coordinator.enqueuePrompt(dmgApp)
                             }
                             .buttonStyle(.borderedProminent)
@@ -368,7 +401,7 @@ struct MountedDMGsTabView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .help("Yenile")
+                .help(tr("Refresh"))
             }
         }
     }
@@ -378,10 +411,13 @@ struct MountedDMGsTabView: View {
 
 struct SettingsAndPermissionsTabView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var language = LanguageManager.shared
+
+    @State private var hasFullDiskAccess = Permissions.hasFullDiskAccess
 
     var body: some View {
         Form {
-            Section("Hedef Harici Disk") {
+            Section(tr("Target External Drive")) {
                 ForEach(settings.availableExternalDrives) { drive in
                     let targetPath = drive.defaultApplicationsFolderURL.path
                     let isSelected = settings.externalApplicationsPath == targetPath
@@ -394,7 +430,7 @@ struct SettingsAndPermissionsTabView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(drive.name)
                                 .font(.system(size: 13, weight: .medium))
-                            Text("\(drive.formattedAvailable) boş · Toplam \(drive.formattedTotal)")
+                            Text(tr("{free} free · {total} total", ["free": drive.formattedAvailable, "total": drive.formattedTotal]))
                                 .font(.system(size: 11).monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
@@ -406,7 +442,7 @@ struct SettingsAndPermissionsTabView: View {
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(Color.accentColor)
                         } else {
-                            Button("Seç") {
+                            Button(tr("Select")) {
                                 settings.externalApplicationsPath = targetPath
                             }
                             .controlSize(.small)
@@ -415,14 +451,14 @@ struct SettingsAndPermissionsTabView: View {
                     .padding(.vertical, 2)
                 }
 
-                LabeledContent("Kurulum Klasörü") {
+                LabeledContent(tr("Install Folder")) {
                     HStack(spacing: 8) {
-                        Text(settings.externalApplicationsPath.isEmpty ? "Seçilmedi" : settings.externalApplicationsPath)
+                        Text(settings.externalApplicationsPath.isEmpty ? tr("Not selected") : settings.externalApplicationsPath)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Button("Seç…") {
+                        Button(tr("Choose…")) {
                             selectCustomExternalFolder()
                         }
                         .controlSize(.small)
@@ -430,66 +466,141 @@ struct SettingsAndPermissionsTabView: View {
                 }
             }
 
-            Section("Davranış") {
-                Toggle("Mac Açıldığında Otomatik Başlat", isOn: Binding(
-                    get: { settings.isLaunchAtLoginEnabled },
-                    set: { settings.setLaunchAtLogin(enabled: $0) }
-                ))
-                Toggle("Otomatik İzleme", isOn: $settings.isMonitoringEnabled)
-                Toggle("DMG Açıldığında Kurulum Penceresini Göster", isOn: $settings.watchMountedDMGs)
-                Toggle("Applications Klasörüne Eklenen Uygulamaları Yakala", isOn: $settings.watchApplicationsFolder)
+            Section(tr("Behavior")) {
+                LaunchAtLoginRow(showsRecommendation: false)
 
-                Picker("Minimum Uygulama Boyutu", selection: $settings.minimumAppSizeMB) {
-                    Text("Tüm Uygulamalar").tag(0.0)
-                    Text("100 MB ve üzeri").tag(100.0)
-                    Text("250 MB ve üzeri").tag(250.0)
-                    Text("500 MB ve üzeri").tag(500.0)
-                    Text("1 GB ve üzeri").tag(1000.0)
+                Toggle(tr("Automatic Monitoring"), isOn: $settings.isMonitoringEnabled)
+
+                // These only act while monitoring is on, so they are greyed out otherwise.
+                Group {
+                    Toggle(tr("Show Install Window When a Disk Image Opens"), isOn: $settings.watchMountedDMGs)
+                    Toggle(tr("Catch Apps Added to Applications"), isOn: $settings.watchApplicationsFolder)
+
+                    Picker(tr("Minimum App Size"), selection: $settings.minimumAppSizeMB) {
+                        Text(tr("All Apps")).tag(0.0)
+                        Text(tr("{size} and larger", ["size": "100 MB"])).tag(100.0)
+                        Text(tr("{size} and larger", ["size": "250 MB"])).tag(250.0)
+                        Text(tr("{size} and larger", ["size": "500 MB"])).tag(500.0)
+                        Text(tr("{size} and larger", ["size": "1 GB"])).tag(1000.0)
+                    }
+                }
+                .disabled(!settings.isMonitoringEnabled)
+
+                if !settings.isMonitoringEnabled {
+                    Text(tr("Turn on Automatic Monitoring to use these options."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Güncellemeler ve Temizlik") {
-                Toggle("Uygulama Güncellendiğinde Kısayolu Koru", isOn: $settings.protectSymlinksOnAutoUpdate)
+            Section(tr("Updates and Cleanup")) {
+                Toggle(tr("Keep Launcher When an App Updates"), isOn: $settings.protectSymlinksOnAutoUpdate)
+                    .disabled(!settings.isMonitoringEnabled)
                 if settings.protectSymlinksOnAutoUpdate {
-                    Toggle("Sormadan Otomatik Harici Diske Taşı", isOn: $settings.autoMoveOnSymlinkOverwrite)
+                    Toggle(tr("Move to External Drive Without Asking"), isOn: $settings.autoMoveOnSymlinkOverwrite)
+                        .disabled(!settings.isMonitoringEnabled)
                 }
-                Toggle("Kurulumdan Sonra DMG Disk İmajını Çıkar", isOn: $settings.autoEjectDMGAfterInstall)
-                Toggle("Kurulumdan Sonra .dmg Dosyasını Çöp Kutusu'na Taşı", isOn: $settings.moveDMGToTrashAfterInstall)
+                Toggle(tr("Eject Disk Image After Install"), isOn: $settings.autoEjectDMGAfterInstall)
+                Toggle(tr("Move .dmg File to Trash After Install"), isOn: $settings.moveDMGToTrashAfterInstall)
+                    .disabled(!settings.autoEjectDMGAfterInstall)
+                if !settings.autoEjectDMGAfterInstall {
+                    Text(tr("The .dmg file can only be moved to the Trash after the disk image has been ejected."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Section("İzinler") {
-                LabeledContent("Uygulamalar Klasörü Erişimi") {
+            Section(tr("Permissions")) {
+                LabeledContent(tr("App Management")) {
+                    Button(tr("System Settings…")) {
+                        Permissions.openAppManagementSettings()
+                    }
+                    .controlSize(.small)
+                }
+
+                LabeledContent(tr("Full Disk Access")) {
                     HStack(spacing: 8) {
-                        let writable = AppInstallerService.hasApplicationsWriteAccess()
                         Circle()
-                            .fill(writable ? Color.green : Color.orange)
+                            .fill(hasFullDiskAccess ? Color.green : Color.orange)
                             .frame(width: 7, height: 7)
-                        Text(writable ? "Etkin" : "Yönetici Onayı Gerekebilir")
+                        Text(hasFullDiskAccess ? tr("Granted") : tr("Not granted"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
-                        Button("Sistem Ayarları…") {
-                            AppInstallerService.openFullDiskAccessSettings()
+                        Button(tr("System Settings…")) {
+                            Permissions.openFullDiskAccessSettings()
                         }
                         .controlSize(.small)
                     }
                 }
 
+                Text(tr("Allow EXdl under App Management so it can replace and move apps in /Applications. Full Disk Access is optional: it saves you the extra prompts for Downloads, Desktop, Documents and external drives."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if !settings.ignoredBundleNames.isEmpty {
-                    LabeledContent("Yoksayılan Uygulamalar") {
-                        Button("Sıfırla (\(settings.ignoredBundleNames.count))") {
+                    LabeledContent(tr("Ignored Apps")) {
+                        Button(tr("Reset ({count})", ["count": String(settings.ignoredBundleNames.count)])) {
                             settings.ignoredBundleNames.removeAll()
                         }
                         .controlSize(.small)
                     }
                 }
             }
+
+            Section(tr("Language")) {
+                Picker(tr("Interface Language"), selection: Binding(
+                    get: { language.language },
+                    set: { language.setLanguage($0) }
+                )) {
+                    ForEach(AppLanguage.allCases) { option in
+                        Text(option.nativeName).tag(option)
+                    }
+                }
+            }
+
+            Section(tr("About EXdl")) {
+                LabeledContent(tr("Version")) {
+                    Text(AppInfo.version)
+                        .foregroundStyle(.secondary)
+                }
+
+                LabeledContent(tr("EXdl is free and open source")) {
+                    Button {
+                        NSWorkspace.shared.open(AppInfo.repositoryURL)
+                    } label: {
+                        Label(tr("Star on GitHub"), systemImage: "star.fill")
+                    }
+                    .controlSize(.small)
+                }
+
+                LabeledContent(tr("First-run guide")) {
+                    Button(tr("Show Welcome Guide…")) {
+                        OnboardingWindowController.shared.show(restart: true)
+                    }
+                    .controlSize(.small)
+                }
+
+                LabeledContent(tr("Questions or bugs?")) {
+                    Button(tr("Open Issues")) {
+                        NSWorkspace.shared.open(AppInfo.issuesURL)
+                    }
+                    .controlSize(.small)
+                }
+            }
         }
         .formStyle(.grouped)
+        .onAppear {
+            hasFullDiskAccess = Permissions.hasFullDiskAccess
+            settings.refreshLaunchAtLogin()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            hasFullDiskAccess = Permissions.hasFullDiskAccess
+        }
     }
 
     private func selectCustomExternalFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Harici Diskteki Uygulamalar Klasörünü Seçin"
+        panel.title = tr("Choose the Applications Folder on Your External Drive")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
@@ -499,5 +610,66 @@ struct SettingsAndPermissionsTabView: View {
         if panel.runModal() == .OK, let selectedURL = panel.url {
             settings.externalApplicationsPath = selectedURL.path
         }
+    }
+}
+
+/// The "Launch at Login" switch with the explanation macOS needs the user to see:
+/// pending approval, errors and the Applications-folder requirement.
+struct LaunchAtLoginRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var language = LanguageManager.shared
+
+    /// Adds a "Recommended" hint while the switch is off (used by the first-run guide).
+    let showsRecommendation: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(
+                get: { settings.isLaunchAtLoginEnabled },
+                set: { settings.setLaunchAtLogin(enabled: $0) }
+            )) {
+                HStack(spacing: 8) {
+                    Text(tr("Launch at Login"))
+                    if showsRecommendation && !settings.isLaunchAtLoginEnabled {
+                        RecommendedBadge()
+                    }
+                }
+            }
+
+            if settings.launchAtLoginStatus == .requiresApproval {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(tr("macOS needs your approval: turn EXdl on in System Settings → General → Login Items."))
+                        .font(.caption)
+                    Spacer()
+                    Button(tr("Open Login Items")) {
+                        settings.openLoginItemsSettings()
+                    }
+                    .controlSize(.small)
+                }
+            } else if let error = settings.launchAtLoginError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            } else if !settings.isRunningFromApplications {
+                Text(tr("Move EXdl to the Applications folder first, otherwise macOS may not start it at login."))
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
+struct RecommendedBadge: View {
+    @ObservedObject private var language = LanguageManager.shared
+
+    var body: some View {
+        Text(tr("Recommended"))
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.accentColor.opacity(0.16)))
+            .foregroundStyle(Color.accentColor)
     }
 }

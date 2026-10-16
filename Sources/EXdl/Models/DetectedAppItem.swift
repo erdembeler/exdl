@@ -12,11 +12,11 @@ enum TriggerSource: Equatable {
     var subtitleText: String {
         switch self {
         case .mountedDMG(let volURL, _):
-            return "\(volURL.lastPathComponent) disk imajı"
+            return tr("{volume} disk image", ["volume": volURL.lastPathComponent])
         case .applicationsFolder:
-            return "Uygulamalar klasörüne eklendi"
+            return tr("Added to the Applications folder")
         case .symlinkOverwrittenByUpdate:
-            return "Güncelleme algılandı · Kısayol yenilenecek"
+            return tr("Update detected · Launcher will be restored")
         }
     }
 }
@@ -110,7 +110,7 @@ struct InstalledAppInfo: Identifiable, Equatable {
 
     var formattedSize: String {
         if isSymlink && !isTargetReachable {
-            return "Disk Takılı Değil"
+            return tr("Drive Not Connected")
         }
         return ByteCountFormatter.string(fromByteCount: sizeInBytes, countStyle: .file)
     }

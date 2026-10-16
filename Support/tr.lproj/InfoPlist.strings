@@ -1,0 +1,4 @@
+"NSRemovableVolumesUsageDescription" = "EXdl uygulamaları harici diskinize kopyalar ve onlara işaret eden başlatıcıları korur.";
+"NSDownloadsFolderUsageDescription" = "Bu seçeneği açarsanız EXdl, kurulum yaptıktan sonra İndirilenler klasöründeki disk imajını Çöp Kutusu’na taşıyabilir.";
+"NSDesktopFolderUsageDescription" = "Bu seçeneği açarsanız EXdl, kurulum yaptıktan sonra Masaüstündeki disk imajını Çöp Kutusu’na taşıyabilir.";
+"NSDocumentsFolderUsageDescription" = "Bu seçeneği açarsanız EXdl, kurulum yaptıktan sonra Belgeler klasöründeki disk imajını Çöp Kutusu’na taşıyabilir.";
