@@ -41,7 +41,7 @@ final class DashboardWindowController: ObservableObject {
                 backing: .buffered,
                 defer: false
             )
-            win.title = "HariciKur"
+            win.title = "EXdl"
             win.toolbarStyle = .unified
             win.minSize = NSSize(width: 680, height: 460)
             win.contentViewController = hostingController

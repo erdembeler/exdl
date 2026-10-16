@@ -9,7 +9,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 12) {
             // 1. Üst Başlık ve Anahtar
             HStack {
-                Text("HariciKur")
+                Text("EXdl")
                     .font(.system(size: 13.5, weight: .semibold))
                 Spacer()
                 Toggle("", isOn: $settings.isMonitoringEnabled)
@@ -112,7 +112,7 @@ struct MenuBarView: View {
                 Divider()
                     .padding(.vertical, 4)
 
-                MenuRowButton(title: "HariciKur'dan Çık", icon: "power") {
+                MenuRowButton(title: "EXdl'den Çık", icon: "power") {
                     NSApplication.shared.terminate(nil)
                 }
             }

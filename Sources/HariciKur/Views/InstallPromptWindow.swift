@@ -18,7 +18,7 @@ final class InstallPromptPanelController {
                 backing: .buffered,
                 defer: false
             )
-            panel.title = "HariciKur"
+            panel.title = "EXdl"
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.isFloatingPanel = true

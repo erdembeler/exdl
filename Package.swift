@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "HariciKur",
+    name: "EXdl",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "HariciKur", targets: ["HariciKur"]),
-        .executable(name: "HariciKurStubLauncher", targets: ["HariciKurStubLauncher"])
+        .executable(name: "EXdl", targets: ["EXdl"]),
+        .executable(name: "EXdlStubLauncher", targets: ["EXdlStubLauncher"])
     ],
     targets: [
         .executableTarget(
-            name: "HariciKur",
+            name: "EXdl",
             path: "Sources/HariciKur"
         ),
         .executableTarget(
-            name: "HariciKurStubLauncher",
+            name: "EXdlStubLauncher",
             path: "Sources/StubLauncher"
         )
     ]

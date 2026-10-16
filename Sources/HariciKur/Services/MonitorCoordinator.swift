@@ -312,7 +312,8 @@ final class MonitorCoordinator: ObservableObject {
                 continue
             }
 
-            if bundleName.lowercased().contains("haricikur") {
+            let lower = bundleName.lowercased()
+            if lower.contains("exdl") || lower.contains("haricikur") {
                 continue
             }
 

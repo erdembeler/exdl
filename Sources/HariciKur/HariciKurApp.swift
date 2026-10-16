@@ -5,14 +5,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { @MainActor in
             MonitorCoordinator.shared.start()
-            // Kullanıcının sürükle-bırak demo penceresini hemen deneyebilmesi için aç
             InstallPromptPanelController.shared.showPromptWindow()
         }
     }
 }
 
 @main
-struct HariciKurApp: App {
+struct EXdlApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = MonitorCoordinator.shared

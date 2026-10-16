@@ -4,39 +4,43 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-TEAM_ID="CL2XB7QHS4"
+TEAM_ID="DXBCHW6VWL"
+KEYCHAIN_PROFILE="Exdl"
+
 IDENTITY=$(security find-identity -p codesigning -v | grep "Developer ID Application:" | head -n 1 | awk -F'"' '{print $2}')
 
 if [ -z "$IDENTITY" ]; then
-    echo "⚠️  'Developer ID Application' sertifikası anahtar zincirinde bulunamadı."
-    echo "Lütfen Xcode -> Settings -> Accounts -> Manage Certificates altından '+' butonuna basıp 'Developer ID Application' sertifikası ekleyin."
+    echo "❌ 'Developer ID Application' sertifikası anahtar zincirinde bulunamadı."
     exit 1
 fi
 
-echo "🔐 İmzalama kimliği: $IDENTITY"
+echo "🔐 Geliştirici İmzası: $IDENTITY"
+echo "🔑 Noter Profili: $KEYCHAIN_PROFILE (Takım ID: $TEAM_ID)"
+
 VERSION="1.0.0"
-DMG_NAME="HariciKur-$VERSION.dmg"
+APP_NAME="EXdl"
+DMG_NAME="EXdl-$VERSION.dmg"
 OUTPUT_DIR="$SCRIPT_DIR/dist"
 STAGE_DIR="$SCRIPT_DIR/.build/dmg_stage"
 
-# 1. Derle
-echo "🔨 HariciKur derleniyor..."
+# 1. Swift ile Derleme
+echo "🔨 1/5: EXdl derleniyor..."
 swift build -c release
 
-APP_NAME="HariciKur"
 APP_BUNDLE="$SCRIPT_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 pkill -f "$APP_BUNDLE/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+pkill -f "HariciKur" 2>/dev/null || true
 rm -rf "$APP_BUNDLE"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp ".build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
-cp ".build/release/HariciKurStubLauncher" "$RESOURCES_DIR/HariciKurStubLauncher"
+cp ".build/release/EXdlStubLauncher" "$RESOURCES_DIR/HariciKurStubLauncher"
 chmod +x "$RESOURCES_DIR/HariciKurStubLauncher"
 
 if [ -f "$SCRIPT_DIR/AppIcon.icns" ]; then
@@ -49,13 +53,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>HariciKur</string>
+    <string>EXdl</string>
     <key>CFBundleIdentifier</key>
-    <string>com.erdem.HariciKur</string>
+    <string>com.erdem.EXdl</string>
     <key>CFBundleName</key>
-    <string>HariciKur</string>
+    <string>EXdl</string>
     <key>CFBundleDisplayName</key>
-    <string>HariciKur</string>
+    <string>EXdl</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
@@ -74,13 +78,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-# 2. Hardened Runtime ve Zaman Damgası ile İmzala
-echo "🔏 Hardened Runtime ile kod imzalanıyor..."
+# 2. Hardened Runtime ve Developer ID ile İmzala
+echo "🔏 2/5: Hardened Runtime ile kod imzalanıyor..."
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$RESOURCES_DIR/HariciKurStubLauncher"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
 
-# 3. DMG Oluştur
-echo "📦 DMG oluşturuluyor..."
+# 3. Dağıtım DMG'sini Hazırla ve İmzala
+echo "📦 3/5: Dağıtım DMG'si oluşturuluyor ve imzalanıyor..."
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 cp -R "$APP_BUNDLE" "$STAGE_DIR/$APP_NAME.app"
@@ -88,14 +92,26 @@ ln -s /Applications "$STAGE_DIR/Applications"
 
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/$DMG_NAME"
-hdiutil create -volname "HariciKur" -srcfolder "$STAGE_DIR" -ov -format UDZO "$OUTPUT_DIR/$DMG_NAME"
+hdiutil create -volname "EXdl" -srcfolder "$STAGE_DIR" -ov -format UDZO "$OUTPUT_DIR/$DMG_NAME"
 rm -rf "$STAGE_DIR"
 
-# DMG'yi de imzala
 codesign --force --timestamp --sign "$IDENTITY" "$OUTPUT_DIR/$DMG_NAME"
 
+# 4. Apple Noter Servisine Gönder
+echo "📡 4/5: Apple Noter Onayına (Notarization) iletiliyor (bu işlem 1-2 dakika sürebilir)..."
+xcrun notarytool submit "$OUTPUT_DIR/$DMG_NAME" --keychain-profile "$KEYCHAIN_PROFILE" --wait
+
+# 5. Onay Damgasını (Ticket) DMG'ye Zımbala
+echo "🏷️  5/5: Apple onay bileti DMG'ye zımbalanıyor (Stapling)..."
+xcrun stapler staple "$OUTPUT_DIR/$DMG_NAME"
+
+# Gatekeeper Doğrulama Kontrolü
 echo ""
-echo "✅ $OUTPUT_DIR/$DMG_NAME başarıyla imzalandı!"
-echo "📡 Apple Noter Onayına (Notarization) Göndermek İçin:"
-echo "   xcrun notarytool submit \"$OUTPUT_DIR/$DMG_NAME\" --keychain-profile \"AC_PASSWORD\" --wait"
-echo "   xcrun stapler staple \"$OUTPUT_DIR/$DMG_NAME\""
+echo "🔍 Gatekeeper Doğrulama Testi:"
+spctl -a -t open --context context:primary-signature -v "$OUTPUT_DIR/$DMG_NAME"
+
+echo ""
+echo "=================================================="
+echo "🎉 EXdl v$VERSION Apple Tarafından Başarıyla Noterlendi!"
+echo "📍 Onaylı Kurulum Dosyası: $OUTPUT_DIR/$DMG_NAME"
+echo "=================================================="
