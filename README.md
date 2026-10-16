@@ -45,14 +45,15 @@ EXdl doesn't rely on symbolic links. For every app it installs, it places a smal
 - **Automatic** — reacts when a disk image is mounted or an app lands in `/Applications`, and ejects the image once the install is done.
 - **Update protection** — if an updater replaces the launcher with a full copy, EXdl moves the new version back to the drive, on your confirmation or automatically.
 - **Storage dashboard** — see what lives where and move apps between the internal and external disk.
+- **Guided first run** — a short guide picks your language (English or Turkish), suggests the right settings and walks you through the permissions.
 - **Quiet and private** — runs from the menu bar, can launch at login, ignores apps below a size you choose, and makes no network requests.
 
 ## Install
 
 1. Download the latest `EXdl-<version>.dmg` from the [Releases](https://github.com/erdembeler/exdl/releases/latest) page.
 2. Open it and drag **EXdl** into **Applications**.
-3. Launch EXdl — it lives in the menu bar — and choose your external drive.
-4. Grant **Full Disk Access** under *System Settings → Privacy & Security* so EXdl can manage apps in `/Applications`. Without it, EXdl may ask for an administrator password.
+3. Launch EXdl. The first-run guide helps you choose your language and external drive, and suggests turning on **Launch at Login**.
+4. Allow EXdl under *System Settings → Privacy & Security → **App Management*** so it can replace and move apps in `/Applications`; macOS also asks the first time. **Full Disk Access** is optional and saves you the extra prompts for Downloads, Desktop, Documents and external drives.
 
 EXdl is signed with a Developer ID certificate and notarized by Apple.
 
@@ -61,7 +62,7 @@ EXdl is signed with a Developer ID certificate and notarized by Apple.
 - macOS 14 Sonoma or later
 - Apple Silicon Mac
 - An external drive formatted as APFS or Mac OS Extended
-- The interface is currently available in Turkish only
+- English or Turkish interface, switchable in Settings
 
 ## Build from source
 
