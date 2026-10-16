@@ -123,4 +123,4 @@ for (name, s) in iconSizes {
     }
 }
 
-print("Iconset created successfully.")
+print("Iconset created successfully")
