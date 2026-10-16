@@ -8,9 +8,13 @@
 		<data>
 		ZDcfw+TvS1hYMZK5EEZVlgm94aE=
 		</data>
+		<key>Resources/EXdlStubLauncher</key>
+		<data>
+		5rqNyNCOr1z1ioBc6LyjHC/td/U=
+		</data>
 		<key>Resources/HariciKurStubLauncher</key>
 		<data>
-		vrmJAhtNk5m4L7RawGfahi0Jaxg=
+		5xv513TBZAiQpN+Iax3ITYYVNqE=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -22,11 +26,18 @@
 			397z28Mkw3Uc4DcTzvct32AoDih2lp9/C2LVWVevu/I=
 			</data>
 		</dict>
+		<key>Resources/EXdlStubLauncher</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qaWAJnkjefD2WuJM7e73wGz86/EEC7SBKgrN9LJpL2c=
+			</data>
+		</dict>
 		<key>Resources/HariciKurStubLauncher</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			alp29Dz3PiTef46jBuVEjhWqQyfabH1kk6oWpOKR3i0=
+			hcLpRydKS0p0bl55PLE+kkuvyzm0nWgqc2Pep4cTH2U=
 			</data>
 		</dict>
 	</dict>
