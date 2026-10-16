@@ -1,115 +1,85 @@
-# EXdl (External Download & Install Manager)
+<div align="center">
 
-macOS işletim sisteminde uygulamaları doğrudan harici disklere kurmayı sağlayan, otomatik DMG tespiti, yerel sürükle-bırak sahnesi ve Spotlight ile tam uyumlu Akıllı Vekil Paket (Smart App Stub) mimarisine sahip açık kaynaklı bir yardımcı araçtır.
+<img src="assets/icon.png" width="128" height="128" alt="EXdl icon">
 
----
+# EXdl
 
-## Yaşanan Problem ve Geliştirilme Nedeni
+**Install Mac apps straight onto an external drive —<br>and keep them in Launchpad and Spotlight.**
 
-Mac bilgisayarlarda dahili SSD depolaması fabrika çıkışında sınırlıdır ve sonradan fiziksel olarak yükseltilemez. Xcode, Android Studio, Docker, Unreal Engine, Blender veya büyük oyunlar gibi onlarca gigabaytlık araçlar kurulduğunda dahili disk hızla tükenir.
+<br>
 
-Bu noktada harici hızlı bir SSD/NVMe sürücü kullanmak en yaygın çözümdür; ancak macOS kullanıcı deneyimi harici diske uygulama yüklerken ciddi engeller çıkarır:
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#requirements)
+[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#requirements)
+[![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#install)
+[![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 
-1. **DMG Kalıplarındaki Sürükle-Bırak Sınırlaması:**
-   İnternetten indirilen bir `.dmg` dosyası açıldığında geleneksel Apple kurulum penceresi gösterilir. Bu penceredeki kısayol sadece dahili diskteki `/Applications` klasörüne işaret eder. Uygulamayı harici bir diske kurmak isteyen bir kullanıcı bu pencereden yararlanamaz.
+[**Download**](https://github.com/erdembeler/exdl/releases/latest) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Build from source](#build-from-source)
 
-2. **Manuel Kopyalama ve Kısayol Karmaşası:**
-   Uygulamayı harici diske elle sürüklemek, ardından Finder veya Terminal üzerinden `/Applications` içine geleneksel bir kısayol (veya `ln -s` sembolik linki) oluşturmak gerekir.
+</div>
 
-3. **macOS Launchpad ve Apps.app Görünmeme Sorunu:**
-   macOS Sequoia ve sonraki sürümlerde (özellikle yeni nesil `Apps.app` ve Launchpad dizinleme sisteminde), `/Applications` klasörüne yerleştirilen üst düzey POSIX sembolik linkleri ve klasik kısayollar sistem tarafından taranmaz (`Skipping symlink folder` mekanizması). Bunun sonucunda harici diske taşınan ve kısayolu oluşturulan uygulamalar:
-   - Spotlight aramalarında çıkmaz,
-   - Launchpad veya Uygulamalar çekmecesinde görünmez,
-   - Dock üzerinde soru işaretine dönüşebilir veya başlatılamaz.
+<br>
 
-4. **Kopuk Kısayollar ve Sistem Donmaları:**
-   Harici disk bağlı olmadığında bu kısayollara tıklandığında sistem açıklayıcı bir uyarı vermez; uygulama sessizce açılmaz ya da hata verir.
+EXdl (External Download & Install) is a menu bar utility that makes an external SSD a first-class home for your apps. Open a disk image, drop the app on your drive, and EXdl takes care of the rest.
 
-5. **Otomatik Güncelleme Kayıpları:**
-   Birçok uygulama (Sparkle vb. çerçeveler kullananlar) arka planda otomatik güncellendiğinde `/Applications` altındaki kısayol dosyasını siler ve yerine güncel sürümü dahili diske yazar. Bu da kullanıcının haberi olmadan dahili disk alanının yeniden dolmasına yol açar.
+## Why EXdl
 
-EXdl, tüm bu süreci tek bir yerel deneyime dönüştürerek harici disk kullanımını dahili disk kadar pürüzsüz hale getirmek amacıyla geliştirilmiştir.
+A Mac's internal storage can't be upgraded, and large apps — Xcode, Docker, Unreal Engine, Blender, games — fill it quickly. An external SSD solves the capacity problem, but macOS isn't designed to install apps onto it.
 
----
+| | Without EXdl | With EXdl |
+| :-- | :-- | :-- |
+| **Installing from a disk image** | The *Applications* shortcut always points to the internal disk | Drop the app straight onto your external drive |
+| **Launchpad & Spotlight** | Symlinked apps often don't show up | Apps stay searchable and launchable |
+| **Drive disconnected** | The app silently fails to open | A clear prompt asks you to reconnect the drive |
+| **Auto-updates** | The updater writes a new copy to the internal disk | EXdl detects it and offers to move it back |
 
-## Temel Özellikler
+## How it works
 
-- **Otomatik DMG Yakalama:**
-  İndirdiğiniz bir `.dmg` dosyasına çift tıkladığınız anda EXdl arka planda disk kalıbını analiz eder. Dahili diske hiçbir veri yazmadan doğrudan kurulum penceresini açar.
+```mermaid
+flowchart LR
+    A["Disk image<br/>(.dmg)"] -->|"1 · EXdl detects it"| B["EXdl"]
+    B -->|"2 · copies the app"| C[("External drive<br/>full app")]
+    B -->|"3 · adds a launcher"| D["/Applications<br/>launcher"]
+    D -.->|"opens"| C
+```
 
-- **Yerel Görsel Sürükle-Bırak Deneyimi:**
-  Apple'ın standart DMG kurulum arayüzüne sadık kalınarak tasarlanan pencerede; uygulama ikonu, takılı harici diskleriniz ve dahili `/Applications` dizini yan yana listelenir. Tek yapmanız gereken uygulama ikonunu hedef harici diskin simgesine sürükleyip bırakmaktır.
+EXdl doesn't rely on symbolic links. For every app it installs, it places a small launcher bundle in `/Applications` that carries the original icon and metadata, so Launchpad, Spotlight and the Dock treat it like any other app. Opening it starts the real app from your drive — or asks you to reconnect the drive if it isn't available.
 
-- **Akıllı Vekil Paketler (Smart App Stubs):**
-  EXdl, klasik sembolik linkler (`ln -s`) kullanmaz. Bunun yerine `/Applications` dizini içerisine yaklaşık 500 KB boyutunda, orijinal uygulamanın simgelerini ve kimliğini (`Info.plist`) taşıyan hafif bir yerel macOS paketi (`.app`) yerleştirir.
-  - Uygulama; Spotlight, Launchpad, Dock ve macOS `Apps.app` çekmecesinde yerel bir uygulama gibi taranır ve görünür.
-  - Harici disk bağlı değilken uygulama çalıştırılırsa sistem donması yerine "Lütfen harici diskinizi bağlayın" uyarısı görüntülenir.
+## Features
 
-- **Otomatik Güncelleme Koruması:**
-  Uygulama kendini güncelleyip `/Applications` içine yeni sürüm yazmaya çalışırsa EXdl (CoreServices FSEvents motoru) değişikliği fark eder, yeni sürümü harici diske taşır ve vekil paketi korur.
+- **Automatic** — reacts when a disk image is mounted or an app lands in `/Applications`, and ejects the image once the install is done.
+- **Update protection** — if an updater replaces the launcher with a full copy, EXdl moves the new version back to the drive, on your confirmation or automatically.
+- **Storage dashboard** — see what lives where and move apps between the internal and external disk.
+- **Quiet and private** — runs from the menu bar, can launch at login, ignores apps below a size you choose, and makes no network requests.
 
-- **Depolama Yöneticisi (Dashboard):**
-  Dahili diskinizde daha önceden yer kaplayan büyük uygulamaları tek bir ekranda listeleyebilir; tek tıkla harici diske aktarabilir veya dilediğiniz zaman dahili diske geri alabilirsiniz.
+## Install
 
-- **Menü Çubuğu Entegrasyonu:**
-  Menü çubuğundaki durum simgesi üzerinden anlık durumu izleyebilir, disk kullanım istatistiklerini kontrol edebilir ve tercihleriniz doğrultusunda arka plan izlemesini yönetebilirsiniz.
+1. Download the latest `EXdl-<version>.dmg` from the [Releases](https://github.com/erdembeler/exdl/releases/latest) page.
+2. Open it and drag **EXdl** into **Applications**.
+3. Launch EXdl — it lives in the menu bar — and choose your external drive.
+4. Grant **Full Disk Access** under *System Settings → Privacy & Security* so EXdl can manage apps in `/Applications`. Without it, EXdl may ask for an administrator password.
 
----
+EXdl is signed with a Developer ID certificate and notarized by Apple.
 
-## Güvenlik ve İzin İhtiyaçları
+## Requirements
 
-EXdl, sistem çekirdeğine herhangi bir kext veya sistem uzantısı yüklemez; macOS'in resmi kamu API'leri (`AppKit`, `CoreServices`, `ServiceManagement`) ile çalışır.
+- macOS 14 Sonoma or later
+- Apple Silicon Mac
+- An external drive formatted as APFS or Mac OS Extended
+- The interface is currently available in Turkish only
 
-Uygulamanın düzgün çalışabilmesi için aşağıdaki izinler gereklidir:
-
-1. **Tam Disk Erişimi (Full Disk Access):**
-   - **Neden Gereklidir:** macOS TCC (Transparency, Consent, and Control) güvenlik mimarisi nedeniyle `/Applications` klasörüne dosya yazmak, DMG içeriklerini harici bağlı disklere (`/Volumes/...`) taşımak ve vekil paket oluşturmak için bu izin zorunludur.
-   - **Gizlilik:** EXdl tamamen açık kaynaklıdır. Kişisel belgelere, fotoğraflara veya kullanıcı verilerine kesinlikle erişmez. Herhangi bir sunucuya veri göndermez; telemetri, analitik veya izleme kodu barındırmaz.
-
-2. **Bildirim İzni:**
-   - Bir disk kalıbı algılandığında veya arka planda bir taşıma işlemi tamamlandığında sizi bilgilendirmek için kullanılır.
-
----
-
-## Kurulum
-
-### GitHub Releases Üzerinden İndirme
-
-1. Bu deponun [Releases](../../releases) sayfasını ziyaret edin.
-2. En güncel sürümün altında bulunan `EXdl-1.0.0.dmg` dosyasını bilgisayarınıza indirin.
-3. İndirilen DMG dosyasını açın ve `EXdl` uygulamasını `Applications` klasörüne sürükleyin.
-4. Uygulamayı ilk kez başlattığınızda karşınıza çıkacak adımları takip ederek:
-   - **Sistem Ayarları > Gizlilik ve Güvenlik > Tam Disk Erişimi** bölümünden `EXdl` için izin anahtarını aktif hale getirin.
-
-> **Güvenlik Notu:** EXdl, Apple Geliştirici Sertifikası (`Developer ID Application: Erdem Beler`) ile imzalanmış ve doğrudan Apple Noter Servisi (Apple Notarization) tarafından resmi olarak taranıp onaylanmıştır. Gatekeeper engeliyle karşılaşmadan güvenle çalışır.
-
----
-
-## Kaynaktan Derleme
-
-Geliştiriciler projeyi doğrudan kaynak kodundan derleyebilir:
+## Build from source
 
 ```bash
 git clone https://github.com/erdembeler/exdl.git
 cd exdl
 
-# Swift Package Manager ile derleme ve uygulama paketini hazırlama:
-./build_app.sh
-
-# Dağıtım DMG paketini oluşturma:
-./package_release.sh
+./build_app.sh        # build EXdl.app
+./package_release.sh  # build and package dist/EXdl-<version>.dmg and .zip
+./notarize.sh         # sign with Developer ID and notarize the release DMG
 ```
 
----
+`notarize.sh` needs a *Developer ID Application* certificate and a `notarytool` keychain profile; set `TEAM_ID` and `KEYCHAIN_PROFILE` at the top of the script. The installer image is built with [dmgbuild](https://github.com/dmgbuild/dmgbuild), which the scripts install into `.build/` on first run (Python 3 and network access required).
 
-## Sistem Gereksinimleri
+## License
 
-- **İşletim Sistemi:** macOS 14.0 (Sonoma) veya daha yeni bir macOS sürümü (macOS 15 Sequoia ve macOS 26 Tahoe ile tam uyumludur)
-- **Mimari:** Apple Silicon (M1/M2/M3/M4) ve Intel x86_64
-- **Depolama:** APFS veya Mac OS Genişletilmiş (Günlüklü) formatında biçimlendirilmiş harici depolama aygıtları
-
----
-
-## Lisans
-
-Bu proje [MIT Lisansı](LICENSE) kapsamında sunulmaktadır.
+Released under the MIT License.
