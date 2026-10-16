@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openedByLoginItem = Self.eventSaysLaunchedAtLogin()
         Task { @MainActor in
             MonitorCoordinator.shared.start()
+            UpdateService.shared.startAutomaticChecksIfNeeded()
 
             if !OnboardingState.isCompleted {
                 OnboardingWindowController.shared.show()

@@ -411,8 +411,10 @@ struct MountedDMGsTabView: View {
 
 struct SettingsAndPermissionsTabView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var updater = UpdateService.shared
     @ObservedObject private var language = LanguageManager.shared
 
+    @State private var hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
     @State private var hasFullDiskAccess = Permissions.hasFullDiskAccess
 
     var body: some View {
@@ -512,10 +514,18 @@ struct SettingsAndPermissionsTabView: View {
 
             Section(tr("Permissions")) {
                 LabeledContent(tr("App Management")) {
-                    Button(tr("System Settings…")) {
-                        Permissions.openAppManagementSettings()
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(hasAppManagement ? Color.green : Color.orange)
+                            .frame(width: 7, height: 7)
+                        Text(hasAppManagement ? tr("Granted") : tr("Not granted"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Button(tr("System Settings…")) {
+                            Permissions.openAppManagementSettings()
+                        }
+                        .controlSize(.small)
                     }
-                    .controlSize(.small)
                 }
 
                 LabeledContent(tr("Full Disk Access")) {
@@ -533,9 +543,16 @@ struct SettingsAndPermissionsTabView: View {
                     }
                 }
 
-                Text(tr("Allow EXdl under App Management so it can replace and move apps in /Applications. Full Disk Access is optional: it saves you the extra prompts for Downloads, Desktop, Documents and external drives."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(tr("If EXdl is not listed in System Settings, click the “+” button at the bottom left and select EXdl from Applications."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(tr("Show EXdl in Finder")) {
+                        Permissions.revealAppInFinder()
+                    }
+                    .controlSize(.small)
+                }
 
                 if !settings.ignoredBundleNames.isEmpty {
                     LabeledContent(tr("Ignored Apps")) {
@@ -560,41 +577,49 @@ struct SettingsAndPermissionsTabView: View {
 
             Section(tr("About EXdl")) {
                 LabeledContent(tr("Version")) {
-                    Text(AppInfo.version)
-                        .foregroundStyle(.secondary)
-                }
-
-                LabeledContent(tr("EXdl is free and open source")) {
-                    Button {
-                        NSWorkspace.shared.open(AppInfo.repositoryURL)
-                    } label: {
-                        Label(tr("Star on GitHub"), systemImage: "star.fill")
+                    HStack(spacing: 10) {
+                        Text(AppInfo.version)
+                            .foregroundStyle(.secondary)
+                        Button(tr("Check for Updates…")) {
+                            Task { await updater.checkForUpdates(userInitiated: true) }
+                        }
+                        .controlSize(.small)
                     }
-                    .controlSize(.small)
                 }
 
-                LabeledContent(tr("First-run guide")) {
-                    Button(tr("Show Welcome Guide…")) {
+                Toggle(tr("Check for updates automatically"), isOn: $updater.automaticallyCheckForUpdates)
+
+                LabeledContent(tr("Setup Assistant")) {
+                    Button(tr("Open Setup Assistant…")) {
                         OnboardingWindowController.shared.show(restart: true)
                     }
                     .controlSize(.small)
                 }
 
-                LabeledContent(tr("Questions or bugs?")) {
-                    Button(tr("Open Issues")) {
-                        NSWorkspace.shared.open(AppInfo.issuesURL)
+                LabeledContent(tr("Source Code & Support")) {
+                    HStack(spacing: 8) {
+                        Button(tr("GitHub Repository")) {
+                            NSWorkspace.shared.open(AppInfo.repositoryURL)
+                        }
+                        .controlSize(.small)
+
+                        Button(tr("Report an Issue")) {
+                            NSWorkspace.shared.open(AppInfo.issuesURL)
+                        }
+                        .controlSize(.small)
                     }
-                    .controlSize(.small)
                 }
             }
         }
         .formStyle(.grouped)
         .onAppear {
             hasFullDiskAccess = Permissions.hasFullDiskAccess
+            hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
             settings.refreshLaunchAtLogin()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             hasFullDiskAccess = Permissions.hasFullDiskAccess
+            hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
         }
     }
 

@@ -1,49 +1,69 @@
 import SwiftUI
 import AppKit
 
-// MARK: - State
+// MARK: - Persistent Onboarding State
 
 enum OnboardingState {
     private static let completedKey = "onboardingCompleted"
+    private static let currentPageKey = "onboardingCurrentPage"
 
     static var isCompleted: Bool {
         UserDefaults.standard.bool(forKey: completedKey)
     }
 
+    static var savedPage: OnboardingPage {
+        let raw = UserDefaults.standard.integer(forKey: currentPageKey)
+        return OnboardingPage(rawValue: raw) ?? .welcome
+    }
+
+    static func savePage(_ page: OnboardingPage) {
+        UserDefaults.standard.set(page.rawValue, forKey: currentPageKey)
+    }
+
     static func markCompleted() {
         UserDefaults.standard.set(true, forKey: completedKey)
+        UserDefaults.standard.removeObject(forKey: currentPageKey)
+    }
+
+    static func resetForReplay() {
+        UserDefaults.standard.set(OnboardingPage.welcome.rawValue, forKey: currentPageKey)
     }
 }
 
 enum OnboardingPage: Int, CaseIterable {
-    case language
-    case welcome
-    case tour
-    case settings
-    case permissions
-    case drive
-    case done
+    case welcome = 0
+    case permissions = 1
+    case drive = 2
+    case done = 3
 }
 
 @MainActor
 final class OnboardingModel: ObservableObject {
-    @Published var page: OnboardingPage = .language
+    @Published var page: OnboardingPage {
+        didSet {
+            OnboardingState.savePage(page)
+        }
+    }
 
-    var isFirstPage: Bool { page == .language }
+    init() {
+        self.page = OnboardingState.savedPage
+    }
+
+    var isFirstPage: Bool { page == .welcome }
     var isLastPage: Bool { page == .done }
 
     func next() {
         guard let following = OnboardingPage(rawValue: page.rawValue + 1) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { page = following }
+        withAnimation(.easeInOut(duration: 0.2)) { page = following }
     }
 
     func back() {
         guard let previous = OnboardingPage(rawValue: page.rawValue - 1) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { page = previous }
+        withAnimation(.easeInOut(duration: 0.2)) { page = previous }
     }
 }
 
-// MARK: - Window
+// MARK: - Window Controller
 
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {
@@ -52,18 +72,23 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let model = OnboardingModel()
 
-    /// Opens the guide. `restart` jumps back to the beginning (skipping the language step once a language is stored).
+    /// Opens the setup assistant. When `restart` is true, starts from the first step.
+    /// When the app restarts after granting a macOS permission, `restart` is false and the window
+    /// automatically resumes on the saved step (e.g. `.permissions`).
     func show(restart: Bool = false) {
-        if restart || window == nil {
-            model.page = Localizer.hasStoredChoice ? .welcome : .language
+        if restart {
+            OnboardingState.resetForReplay()
+            model.page = .welcome
+        } else {
+            model.page = OnboardingState.savedPage
         }
 
         if window == nil {
             let view = OnboardingView(model: model) { [weak self] openDashboard in
-                self?.finish(openDashboard: openDashboard)
+                self?.completeOnboarding(openDashboard: openDashboard)
             }
             let win = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 640, height: 580),
+                contentRect: NSRect(x: 0, y: 0, width: 640, height: 590),
                 styleMask: [.titled, .closable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
@@ -87,21 +112,25 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window?.orderFrontRegardless()
     }
 
-    private func finish(openDashboard: Bool) {
+    private func completeOnboarding(openDashboard: Bool) {
+        OnboardingState.markCompleted()
+        LanguageManager.shared.commitCurrentLanguage()
         window?.close()
         if openDashboard {
             DashboardWindowController.shared.showWindow(selectedTab: .applications)
         }
     }
 
-    // Closing the window (red button, Finish or Skip) all count as "seen it".
+    // IMPORTANT: Do NOT mark onboarding completed in `windowWillClose`.
+    // When macOS restarts the app ("Quit & Reopen") after toggling a permission in System Settings,
+    // AppKit closes open windows during termination. Keeping `isCompleted == false` ensures EXdl
+    // reopens right back on the Permissions step after the restart!
     func windowWillClose(_ notification: Notification) {
-        OnboardingState.markCompleted()
         LanguageManager.shared.commitCurrentLanguage()
     }
 }
 
-// MARK: - Root view
+// MARK: - Root Setup Assistant View
 
 struct OnboardingView: View {
     @ObservedObject var model: OnboardingModel
@@ -112,111 +141,114 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             ZStack {
                 pageContent
-                    .id(model.page)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(x: 24)),
-                        removal: .opacity
-                    ))
+                    .id("\(model.page.rawValue)-\(language.language.rawValue)")
+                    .transition(.opacity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 52)
-            .padding(.top, 46)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 44)
+            .padding(.top, 36)
+            .padding(.bottom, 12)
 
             Divider()
             footer
         }
-        .frame(width: 640, height: 580)
+        .frame(width: 640, height: 590)
         .background(VisualEffectSurface())
     }
 
     @ViewBuilder
     private var pageContent: some View {
         switch model.page {
-        case .language: LanguagePage()
-        case .welcome: WelcomePage()
-        case .tour: TourPage()
-        case .settings: RecommendedSettingsPage(openSettings: openSettings)
-        case .permissions: PermissionsPage()
-        case .drive: DrivePage()
-        case .done: DonePage(openDashboard: { onFinish(true) })
+        case .welcome:
+            WelcomeSetupPage()
+        case .permissions:
+            PermissionsSetupPage()
+        case .drive:
+            DriveAndPreferencesPage()
+        case .done:
+            SetupCompletedPage()
         }
     }
 
     private var footer: some View {
         HStack(spacing: 14) {
             Group {
-                if model.page != .language && !model.isLastPage {
-                    Button(tr("Skip Guide")) { onFinish(false) }
-                        .buttonStyle(.link)
-                        .foregroundStyle(.secondary)
+                if !model.isLastPage {
+                    Button(tr("Skip Setup")) {
+                        onFinish(false)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
                 } else {
-                    // `Color.clear` alone would grow vertically and squeeze the page above.
                     Color.clear.frame(height: 1)
                 }
             }
-            .frame(width: 110, alignment: .leading)
+            .frame(width: 120, alignment: .leading)
 
             Spacer()
 
             HStack(spacing: 7) {
                 ForEach(OnboardingPage.allCases, id: \.self) { page in
                     Circle()
-                        .fill(page == model.page ? Color.accentColor : Color.secondary.opacity(0.28))
-                        .frame(width: 7, height: 7)
+                        .fill(page == model.page ? Color.accentColor : Color.primary.opacity(0.18))
+                        .frame(width: 6, height: 6)
                 }
             }
 
             Spacer()
 
             HStack(spacing: 10) {
-                if !model.isFirstPage && !model.isLastPage {
-                    Button(tr("Back")) { model.back() }
-                        .controlSize(.large)
+                if !model.isFirstPage {
+                    Button(tr("Back")) {
+                        model.back()
+                    }
+                    .controlSize(.large)
                 }
 
                 if model.isLastPage {
-                    Button(tr("Finish")) { onFinish(false) }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .keyboardShortcut(.defaultAction)
+                    Button(tr("Start Using EXdl")) {
+                        onFinish(true)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
                 } else {
-                    Button(model.isFirstPage ? "Continue · Devam" : tr("Continue")) { model.next() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .keyboardShortcut(.defaultAction)
+                    Button(tr("Continue")) {
+                        LanguageManager.shared.commitCurrentLanguage()
+                        model.next()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
-            .frame(width: 170, alignment: .trailing)
+            .frame(width: 210, alignment: .trailing)
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-    }
-
-    private func openSettings() {
-        DashboardWindowController.shared.showWindow(selectedTab: .settings)
+        .padding(.vertical, 14)
     }
 }
 
-// MARK: - Shared pieces
+// MARK: - Shared Apple-Style Building Blocks
 
-private struct PageHeader: View {
+private struct SetupPageHeader: View {
     let title: String
-    let subtitle: String?
+    let subtitle: String
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: 24, weight: .semibold))
+                .tracking(-0.3)
                 .multilineTextAlignment(.center)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 470)
-            }
+
+            Text(subtitle)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 490)
         }
     }
 }
@@ -230,11 +262,11 @@ private struct AppIconImage: View {
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
-            .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+            .shadow(color: .black.opacity(0.14), radius: 8, y: 4)
     }
 }
 
-private struct Card<Content: View>: View {
+private struct GroupedCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -243,450 +275,349 @@ private struct Card<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.75))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
         )
     }
 }
 
-private struct StatusChip: View {
-    let isGood: Bool
-    let goodText: String
-    let badText: String
+private struct PermissionStatusBadge: View {
+    let isGranted: Bool
+    let grantedText: String
+    let pendingText: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Circle()
-                .fill(isGood ? Color.green : Color.orange)
+                .fill(isGranted ? Color.green : Color.orange)
                 .frame(width: 7, height: 7)
-            Text(isGood ? goodText : badText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+            Text(isGranted ? grantedText : pendingText)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(isGranted ? Color.primary.opacity(0.85) : Color.secondary)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill((isGranted ? Color.green : Color.orange).opacity(0.12))
+        )
     }
 }
 
-// MARK: - 1. Language
+// MARK: - Step 1: Welcome & Dynamic Language Selection
 
-private struct LanguagePage: View {
+private struct WelcomeSetupPage: View {
     @ObservedObject private var language = LanguageManager.shared
-
-    var body: some View {
-        VStack(spacing: 26) {
-            Spacer(minLength: 0)
-            AppIconImage(size: 96)
-
-            // Both languages on purpose: this is the screen that picks the language.
-            VStack(spacing: 6) {
-                Text("Choose your language")
-                    .font(.system(size: 26, weight: .bold))
-                Text("Dilinizi seçin")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 16) {
-                ForEach(AppLanguage.allCases) { option in
-                    LanguageCard(
-                        language: option,
-                        isSelected: language.language == option
-                    ) {
-                        language.setLanguage(option)
-                    }
-                }
-            }
-
-            Text("You can change this at any time in Settings.\nBunu istediğiniz zaman Ayarlar'dan değiştirebilirsiniz.")
-                .font(.system(size: 12))
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-private struct LanguageCard: View {
-    let language: AppLanguage
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 10) {
-                Text(language.rawValue.uppercased())
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(isSelected ? Color.accentColor : Color.primary.opacity(0.08)))
-
-                Text(language.nativeName)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
-            .frame(width: 190, height: 112)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.7))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: isSelected ? 2 : 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - 2. Welcome
-
-private struct WelcomePage: View {
-    @ObservedObject private var language = LanguageManager.shared
-
-    var body: some View {
-        VStack(spacing: 22) {
-            Spacer(minLength: 0)
-            AppIconImage(size: 96)
-
-            PageHeader(
-                title: tr("Thanks for downloading EXdl"),
-                subtitle: tr("EXdl is free and open source. If it saves you disk space, please take a moment to star the project on GitHub. It is the best way to support it and it helps other people find it.")
-            )
-
-            Button {
-                NSWorkspace.shared.open(AppInfo.repositoryURL)
-            } label: {
-                Label(tr("Star on GitHub"), systemImage: "star.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(StarButtonStyle())
-
-            Text(tr("It takes a second, and it means a lot."))
-                .font(.system(size: 12))
-                .foregroundStyle(.tertiary)
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-private struct StarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(Color.black.opacity(0.85))
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Color(red: 1.0, green: 0.84, blue: 0.25), Color(red: 1.0, green: 0.70, blue: 0.12)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            )
-            .shadow(color: Color(red: 1.0, green: 0.7, blue: 0.1).opacity(0.35), radius: configuration.isPressed ? 2 : 8, y: 3)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-}
-
-// MARK: - 3. Tour
-
-private struct TourPage: View {
-    @ObservedObject private var language = LanguageManager.shared
-
-    var body: some View {
-        VStack(spacing: 24) {
-            PageHeader(
-                title: tr("How EXdl works"),
-                subtitle: tr("Three steps, and your internal disk stays free.")
-            )
-
-            Card {
-                TourStep(
-                    number: 1,
-                    symbol: "opticaldiscdrive",
-                    title: tr("Open a disk image"),
-                    text: tr("EXdl notices the .dmg and shows an install window.")
-                )
-                Divider().padding(.leading, 70)
-                TourStep(
-                    number: 2,
-                    symbol: "hand.draw",
-                    title: tr("Drag the app onto your drive"),
-                    text: tr("The app is copied to your external drive instead of filling the internal one.")
-                )
-                Divider().padding(.leading, 70)
-                TourStep(
-                    number: 3,
-                    symbol: "app.badge.checkmark",
-                    title: tr("Open it like any other app"),
-                    text: tr("A tiny launcher stays in Applications, so Launchpad and Spotlight still find it. If the drive is unplugged, EXdl tells you.")
-                )
-            }
-
-            HStack(spacing: 10) {
-                Image(systemName: "externaldrive.fill.badge.checkmark")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.accentColor)
-                Text(tr("EXdl lives in the menu bar. Look for the drive icon at the top of your screen."))
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 6)
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-private struct TourStep: View {
-    let number: Int
-    let symbol: String
-    let title: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.14))
-                Image(systemName: symbol)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(number). \(title)")
-                    .font(.system(size: 14, weight: .semibold))
-                Text(text)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-    }
-}
-
-// MARK: - 4. Recommended settings
-
-private struct RecommendedSettingsPage: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var language = LanguageManager.shared
-    let openSettings: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
-            PageHeader(
-                title: tr("Recommended settings"),
-                subtitle: tr("These switches live in Settings → Behavior. Here are the ones we suggest turning on.")
-            )
-
-            Card {
-                VStack(alignment: .leading, spacing: 4) {
-                    LaunchAtLoginRow(showsRecommendation: true)
-                    caption(tr("EXdl keeps watching in the menu bar after every restart, so you never miss a disk image."))
+            // Top bar: native language selector that updates the entire UI immediately
+            HStack {
+                Spacer()
+                HStack(spacing: 8) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Picker("", selection: Binding(
+                        get: { language.language },
+                        set: { language.setLanguage($0) }
+                    )) {
+                        ForEach(AppLanguage.allCases) { option in
+                            Text(option.nativeName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 160)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-                Divider().padding(.leading, 16)
-
-                RecommendedToggle(
-                    title: tr("Show Install Window When a Disk Image Opens"),
-                    caption: tr("Open a .dmg and EXdl offers to put the app on your external drive."),
-                    isOn: $settings.watchMountedDMGs
-                )
-                Divider().padding(.leading, 16)
-
-                RecommendedToggle(
-                    title: tr("Catch Apps Added to Applications"),
-                    caption: tr("Apps installed the usual way can be moved to your drive afterwards."),
-                    isOn: $settings.watchApplicationsFolder
-                )
-                Divider().padding(.leading, 16)
-
-                RecommendedToggle(
-                    title: tr("Keep Launcher When an App Updates"),
-                    caption: tr("If an update brings the app back to the internal disk, EXdl offers to move it again."),
-                    isOn: $settings.protectSymlinksOnAutoUpdate
-                )
-                Divider().padding(.leading, 16)
-
-                RecommendedToggle(
-                    title: tr("Eject Disk Image After Install"),
-                    caption: tr("Keeps your desktop tidy once the app has been copied."),
-                    isOn: $settings.autoEjectDMGAfterInstall
-                )
             }
 
-            Button(tr("Open Settings…")) { openSettings() }
-                .controlSize(.regular)
+            AppIconImage(size: 76)
+
+            SetupPageHeader(
+                title: tr("Welcome to EXdl"),
+                subtitle: tr("Install and manage large macOS applications on your external drive while keeping them in Launchpad and Spotlight.")
+            )
+
+            GroupedCard {
+                FeatureRow(
+                    symbol: "opticaldiscdrive",
+                    title: tr("Automatic Disk Image Detection"),
+                    description: tr("When you open a .dmg file, EXdl presents a drag-and-drop window targeting your external drive directly.")
+                )
+                Divider().padding(.leading, 56)
+                FeatureRow(
+                    symbol: "app.badge.checkmark",
+                    title: tr("Smart Application Launchers"),
+                    description: tr("Full application bundles live on your external SSD while a lightweight ~500 KB launcher stays in /Applications for Spotlight and Launchpad.")
+                )
+                Divider().padding(.leading, 56)
+                FeatureRow(
+                    symbol: "arrow.triangle.2.circlepath",
+                    title: tr("Update Protection & Storage Manager"),
+                    description: tr("Automatically keeps external links intact across app updates and lets you move existing apps with one click.")
+                )
+            }
 
             Spacer(minLength: 0)
         }
     }
-
-    private func caption(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
 }
 
-private struct RecommendedToggle: View {
+private struct FeatureRow: View {
+    let symbol: String
     let title: String
-    let caption: String
-    @Binding var isOn: Bool
+    let description: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(isOn: $isOn) {
-                HStack(spacing: 8) {
-                    Text(title)
-                    if !isOn { RecommendedBadge() }
-                }
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(description)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(caption)
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 }
 
-// MARK: - 5. Permissions
+// MARK: - Step 2: Permissions
 
-private struct PermissionsPage: View {
+private struct PermissionsSetupPage: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var language = LanguageManager.shared
+
+    @State private var hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
     @State private var hasFullDiskAccess = Permissions.hasFullDiskAccess
 
     var body: some View {
-        VStack(spacing: 20) {
-            PageHeader(
-                title: tr("Permissions"),
-                subtitle: tr("EXdl moves apps in and out of /Applications. macOS protects those apps, so EXdl needs your permission.")
+        VStack(spacing: 16) {
+            SetupPageHeader(
+                title: tr("System Permissions"),
+                subtitle: tr("EXdl needs permission from macOS to manage application bundles in /Applications and access external drives without repeated prompts.")
             )
 
-            Card {
+            GroupedCard {
+                // 1. App Management
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Label(tr("App Management"), systemImage: "app.badge.checkmark")
-                            .font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "app.badge.checkmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                        Text(tr("1. App Management"))
+                            .font(.system(size: 13.5, weight: .semibold))
                         RecommendedBadge()
                         Spacer()
+                        PermissionStatusBadge(
+                            isGranted: hasAppManagement,
+                            grantedText: tr("Granted"),
+                            pendingText: tr("Required")
+                        )
                     }
-                    Text(tr("Lets EXdl update and replace apps in /Applications. macOS also asks the first time EXdl moves an app: choose Allow."))
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(tr("Open Privacy & Security → App Management and switch EXdl on."))
+
+                    Text(tr("Allows EXdl to create launchers and replace app bundles inside /Applications."))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button(tr("Open App Management…")) {
-                        Permissions.openAppManagementSettings()
-                    }
-                    .controlSize(.regular)
-                }
-                .padding(16)
 
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Label(tr("Full Disk Access"), systemImage: "lock.open.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                        Spacer()
-                        StatusChip(isGood: hasFullDiskAccess, goodText: tr("Granted"), badText: tr("Not granted"))
-                    }
-                    Text(tr("Optional. Saves you the extra prompts for Downloads, Desktop, Documents and external drives."))
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(tr("Open Full Disk Access…")) {
-                        Permissions.openFullDiskAccessSettings()
-                    }
-                    .controlSize(.regular)
-                }
-                .padding(16)
-
-                Divider()
-
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: settings.isRunningFromApplications ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(settings.isRunningFromApplications ? Color.green : Color.orange)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tr("EXdl location"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(settings.isRunningFromApplications
-                             ? tr("EXdl is in your Applications folder.")
-                             : tr("EXdl is running from {path}. Drag it into the Applications folder and open it from there, so launch at login works.", ["path": Bundle.main.bundlePath]))
-                            .font(.system(size: 12))
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
+                        Text(tr("In System Settings, switch EXdl on. If EXdl is not listed yet, click the “+” button at the bottom left and add EXdl from Applications."))
+                            .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer(minLength: 0)
+
+                    HStack(spacing: 8) {
+                        Button(tr("Open App Management…")) {
+                            Permissions.openAppManagementSettings()
+                            refreshStatusesAfterDelay()
+                        }
+                        .controlSize(.small)
+
+                        Button(tr("Show EXdl in Finder")) {
+                            Permissions.revealAppInFinder()
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.top, 2)
                 }
-                .padding(16)
+                .padding(14)
+
+                Divider()
+
+                // 2. Full Disk Access
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "externaldrive.badge.checkmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                        Text(tr("2. Full Disk Access"))
+                            .font(.system(size: 13.5, weight: .semibold))
+                        RecommendedBadge()
+                        Spacer()
+                        PermissionStatusBadge(
+                            isGranted: hasFullDiskAccess,
+                            grantedText: tr("Granted"),
+                            pendingText: tr("Not granted")
+                        )
+                    }
+
+                    Text(tr("Prevents repeated permission prompts when reading disk images from Downloads and copying apps to external drives."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
+                        Text(tr("If EXdl is not in the Full Disk Access list, click the “+” button at the bottom left and select EXdl from Applications."))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button(tr("Open Full Disk Access…")) {
+                            Permissions.openFullDiskAccessSettings()
+                        }
+                        .controlSize(.small)
+
+                        Button(tr("Show EXdl in Finder")) {
+                            Permissions.revealAppInFinder()
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(14)
+
+                if !settings.isRunningFromApplications {
+                    Divider()
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tr("EXdl location"))
+                                .font(.system(size: 12.5, weight: .semibold))
+                            Text(tr("EXdl is running from {path}. Move it into /Applications so permissions and login items work reliably.", ["path": Bundle.main.bundlePath]))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                }
             }
+
+            // Reassuring note about macOS "Quit & Reopen" behavior
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.clockwise.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                Text(tr("When macOS asks to “Quit & Reopen” after enabling a permission, confirm it. EXdl will reopen right back on this step so you can complete both permissions."))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 4)
 
             Spacer(minLength: 0)
         }
-        .onAppear { hasFullDiskAccess = Permissions.hasFullDiskAccess }
+        .onAppear {
+            // Trigger TCC registration probe so macOS lists EXdl in App Management automatically
+            DispatchQueue.global(qos: .userInitiated).async {
+                let appMgmt = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: true)
+                let fda = Permissions.hasFullDiskAccess
+                DispatchQueue.main.async {
+                    self.hasAppManagement = appMgmt
+                    self.hasFullDiskAccess = fda
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            hasFullDiskAccess = Permissions.hasFullDiskAccess
+            refreshStatuses()
+        }
+    }
+
+    private func refreshStatuses() {
+        hasFullDiskAccess = Permissions.hasFullDiskAccess
+        hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
+    }
+
+    private func refreshStatusesAfterDelay() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            refreshStatuses()
         }
     }
 }
 
-// MARK: - 6. Drive
+// MARK: - Step 3: External Drive & Automation Preferences
 
-private struct DrivePage: View {
+private struct DriveAndPreferencesPage: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var language = LanguageManager.shared
 
     var body: some View {
-        VStack(spacing: 20) {
-            PageHeader(
-                title: tr("Choose your external drive"),
-                subtitle: tr("Apps you install with EXdl are stored here. You can change it later in Settings.")
+        VStack(spacing: 16) {
+            SetupPageHeader(
+                title: tr("External Drive & Automation"),
+                subtitle: tr("Select the external drive where applications will be stored and configure automatic monitoring.")
             )
 
-            Card {
+            GroupedCard {
                 if settings.availableExternalDrives.isEmpty {
-                    VStack(spacing: 8) {
+                    HStack(spacing: 12) {
                         Image(systemName: "externaldrive.badge.plus")
-                            .font(.system(size: 28, weight: .light))
+                            .font(.system(size: 22, weight: .regular))
                             .foregroundStyle(.secondary)
-                        Text(tr("No external drive found"))
-                            .font(.system(size: 13.5, weight: .semibold))
-                        Text(tr("Plug in a drive and it shows up here."))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tr("No external drive found"))
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(tr("Connect an external SSD or drive to select it as your installation target."))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            settings.refreshExternalDrives()
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .controlSize(.small)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
+                    .padding(14)
                 } else {
                     ForEach(Array(settings.availableExternalDrives.enumerated()), id: \.element.id) { index, drive in
-                        if index > 0 { Divider().padding(.leading, 60) }
-                        DriveRow(
+                        if index > 0 { Divider().padding(.leading, 54) }
+                        DriveSelectionRow(
                             drive: drive,
                             isSelected: settings.externalApplicationsPath == drive.defaultApplicationsFolderURL.path
                         ) {
@@ -694,23 +625,62 @@ private struct DrivePage: View {
                         }
                     }
                 }
-            }
 
-            HStack(spacing: 10) {
-                Button(tr("Choose Another Folder…")) { chooseFolder() }
-                Button {
-                    settings.refreshExternalDrives()
-                } label: {
-                    Label(tr("Refresh"), systemImage: "arrow.clockwise")
+                Divider()
+
+                HStack {
+                    Text(settings.externalApplicationsPath.isEmpty
+                         ? tr("Not selected yet")
+                         : tr("Install folder: {path}", ["path": settings.externalApplicationsPath]))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(tr("Choose Folder…")) { chooseFolder() }
+                        .controlSize(.small)
+                    Button {
+                        settings.refreshExternalDrives()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help(tr("Refresh"))
+                    .controlSize(.small)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
             }
 
-            if !settings.externalApplicationsPath.isEmpty {
-                Text(tr("Install folder: {path}", ["path": settings.externalApplicationsPath]))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            GroupedCard {
+                VStack(alignment: .leading, spacing: 4) {
+                    LaunchAtLoginRow(showsRecommendation: true)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                Divider().padding(.leading, 14)
+
+                PreferenceToggleRow(
+                    title: tr("Show Install Window When a Disk Image Opens"),
+                    caption: tr("Automatically detects mounted .dmg files and offers to install on your external drive."),
+                    isOn: $settings.watchMountedDMGs
+                )
+
+                Divider().padding(.leading, 14)
+
+                PreferenceToggleRow(
+                    title: tr("Keep Launcher When an App Updates"),
+                    caption: tr("Restores the external launcher automatically if an app update overwrites /Applications."),
+                    isOn: $settings.protectSymlinksOnAutoUpdate
+                )
+
+                Divider().padding(.leading, 14)
+
+                PreferenceToggleRow(
+                    title: tr("Eject Disk Image After Install"),
+                    caption: tr("Unmounts the .dmg volume automatically after installation finishes."),
+                    isOn: $settings.autoEjectDMGAfterInstall
+                )
             }
 
             Spacer(minLength: 0)
@@ -732,37 +702,37 @@ private struct DrivePage: View {
     }
 }
 
-private struct DriveRow: View {
+private struct DriveSelectionRow: View {
     let drive: ExternalDriveInfo
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 Image(nsImage: drive.icon)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 30, height: 30)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(drive.name)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text(tr("{free} free · {total} total", ["free": drive.formattedAvailable, "total": drive.formattedTotal]))
-                        .font(.system(size: 11.5).monospacedDigit())
+                        .font(.system(size: 11).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.5))
+                    .font(.system(size: 16))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.45))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
             .contentShape(Rectangle())
         }
@@ -770,50 +740,104 @@ private struct DriveRow: View {
     }
 }
 
-// MARK: - 7. Done
-
-private struct DonePage: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var language = LanguageManager.shared
-    let openDashboard: () -> Void
+private struct PreferenceToggleRow: View {
+    let title: String
+    let caption: String
+    @Binding var isOn: Bool
 
     var body: some View {
-        VStack(spacing: 22) {
-            Spacer(minLength: 0)
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(Color.green)
-                .shadow(color: Color.green.opacity(0.3), radius: 12, y: 4)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+}
 
-            PageHeader(
-                title: tr("You're all set"),
-                subtitle: tr("EXdl now waits quietly in the menu bar. Open a disk image whenever you want to install an app.")
+// MARK: - Step 4: Setup Complete (Restrained Apple Design)
+
+private struct SetupCompletedPage: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var updater = UpdateService.shared
+    @ObservedObject private var language = LanguageManager.shared
+
+    @State private var hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
+    @State private var hasFullDiskAccess = Permissions.hasFullDiskAccess
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 0)
+
+            AppIconImage(size: 72)
+
+            SetupPageHeader(
+                title: tr("Setup Complete"),
+                subtitle: tr("EXdl is now active in the macOS menu bar. Open any .dmg file to install directly onto your external drive.")
             )
 
-            Card {
-                SummaryRow(
-                    symbol: "globe",
-                    title: tr("Language"),
-                    value: language.language.nativeName
-                )
-                Divider().padding(.leading, 52)
+            GroupedCard {
                 SummaryRow(
                     symbol: "externaldrive.fill",
                     title: tr("External drive"),
                     value: settings.isExternalTargetReady ? settings.selectedExternalDriveName : tr("Not selected yet")
                 )
-                Divider().padding(.leading, 52)
+                Divider().padding(.leading, 48)
+                SummaryRow(
+                    symbol: "lock.shield",
+                    title: tr("Permissions"),
+                    value: permissionsSummaryText
+                )
+                Divider().padding(.leading, 48)
                 SummaryRow(
                     symbol: "power",
                     title: tr("Launch at Login"),
                     value: launchAtLoginSummary
                 )
+                Divider().padding(.leading, 48)
+                SummaryRow(
+                    symbol: "arrow.triangle.2.circlepath",
+                    title: tr("Automatic Updates"),
+                    value: updater.automaticallyCheckForUpdates ? tr("On") : tr("Off")
+                )
             }
 
-            Button(tr("Open EXdl")) { openDashboard() }
-                .controlSize(.large)
+            // Subtle menu bar indicator hint
+            HStack(spacing: 8) {
+                Image(systemName: "menubar.rectangle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Text(tr("You can access EXdl anytime from the drive icon in the top-right menu bar."))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer(minLength: 0)
+        }
+        .onAppear {
+            hasAppManagement = Permissions.checkAppManagementAccess(triggerPromptIfUndetermined: false)
+            hasFullDiskAccess = Permissions.hasFullDiskAccess
+        }
+    }
+
+    private var permissionsSummaryText: String {
+        if hasAppManagement && hasFullDiskAccess {
+            return tr("All granted")
+        } else if hasAppManagement || hasFullDiskAccess {
+            return tr("Partially granted")
+        } else {
+            return tr("Can be enabled in Settings")
         }
     }
 
@@ -832,19 +856,19 @@ private struct SummaryRow: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 15))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 24)
+                .frame(width: 22)
             Text(title)
-                .font(.system(size: 13.5))
+                .font(.system(size: 13))
             Spacer()
             Text(value)
-                .font(.system(size: 13.5, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 11)
     }
 }

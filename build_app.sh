@@ -37,7 +37,14 @@ fi
 sed "s/__VERSION__/$VERSION/" "$SCRIPT_DIR/Support/Info.plist.template" > "$CONTENTS_DIR/Info.plist"
 cp -R "$SCRIPT_DIR/Support/en.lproj" "$SCRIPT_DIR/Support/tr.lproj" "$RESOURCES_DIR/"
 
-# Ad-hoc kod imzalama
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Keychain'de Developer ID varsa onunla imzala (TCC izinlerinin korunması için), yoksa ad-hoc imzala
+IDENTITY=$(security find-identity -p codesigning -v 2>/dev/null | grep "Developer ID Application:" | head -n 1 | awk -F'"' '{print $2}')
+if [ -n "$IDENTITY" ]; then
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$RESOURCES_DIR/EXdlStubLauncher"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$RESOURCES_DIR/HariciKurStubLauncher"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
+else
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo "✅ Başarıyla oluşturuldu: $APP_BUNDLE"

@@ -20,6 +20,7 @@ echo "🔑 Noter Profili: $KEYCHAIN_PROFILE (Takım ID: $TEAM_ID)"
 VERSION="1.0.0"
 APP_NAME="EXdl"
 DMG_NAME="EXdl-$VERSION.dmg"
+ZIP_NAME="EXdl-$VERSION.zip"
 OUTPUT_DIR="$SCRIPT_DIR/dist"
 
 # 1. Swift ile Derleme
@@ -61,7 +62,7 @@ codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
 # 3. Dağıtım DMG'sini Hazırla ve İmzala
 echo "📦 3/5: Dağıtım DMG'si oluşturuluyor ve imzalanıyor..."
 mkdir -p "$OUTPUT_DIR"
-rm -f "$OUTPUT_DIR/$DMG_NAME"
+rm -f "$OUTPUT_DIR/$DMG_NAME" "$OUTPUT_DIR/$ZIP_NAME"
 ./make_dmg.sh "$APP_BUNDLE" "$OUTPUT_DIR/$DMG_NAME"
 
 codesign --force --timestamp --sign "$IDENTITY" "$OUTPUT_DIR/$DMG_NAME"
@@ -70,9 +71,11 @@ codesign --force --timestamp --sign "$IDENTITY" "$OUTPUT_DIR/$DMG_NAME"
 echo "📡 4/5: Apple Noter Onayına (Notarization) iletiliyor (bu işlem 1-2 dakika sürebilir)..."
 xcrun notarytool submit "$OUTPUT_DIR/$DMG_NAME" --keychain-profile "$KEYCHAIN_PROFILE" --wait
 
-# 5. Onay Damgasını (Ticket) DMG'ye Zımbala
-echo "🏷️  5/5: Apple onay bileti DMG'ye zımbalanıyor (Stapling)..."
+# 5. Onay Damgasını (Ticket) DMG'ye ve Uygulamaya Zımbala + OTA ZIP Oluştur
+echo "🏷️  5/5: Apple onay bileti DMG'ye ve uygulamaya zımbalanıyor (Stapling)..."
 xcrun stapler staple "$OUTPUT_DIR/$DMG_NAME"
+xcrun stapler staple "$APP_BUNDLE" || true
+ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$OUTPUT_DIR/$ZIP_NAME"
 
 # Gatekeeper Doğrulama Kontrolü
 echo ""
@@ -83,4 +86,5 @@ echo ""
 echo "=================================================="
 echo "🎉 EXdl v$VERSION Apple Tarafından Başarıyla Noterlendi!"
 echo "📍 Onaylı Kurulum Dosyası: $OUTPUT_DIR/$DMG_NAME"
+echo "📍 OTA Güncelleme Arşivi:  $OUTPUT_DIR/$ZIP_NAME"
 echo "=================================================="

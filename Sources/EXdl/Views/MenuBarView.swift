@@ -4,6 +4,7 @@ import AppKit
 struct MenuBarView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = MonitorCoordinator.shared
+    @ObservedObject private var updater = UpdateService.shared
     @ObservedObject private var language = LanguageManager.shared
 
     var body: some View {
@@ -67,6 +68,34 @@ struct MenuBarView: View {
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             )
 
+            // Yeni Güncelleme Varsa
+            if let release = updater.latestRelease, updater.hasAvailableUpdate {
+                Button {
+                    UpdateWindowController.shared.showWindow()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(tr("Update available: EXdl {version}", ["version": release.cleanVersion]))
+                                .font(.caption.weight(.semibold))
+                            Text(tr("Click to download and install"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(8)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
             // Bekleyen Kurulum Varsa
             if let firstPrompt = coordinator.pendingPrompts.first {
                 Button {
@@ -107,12 +136,12 @@ struct MenuBarView: View {
                     DashboardWindowController.shared.showWindow(selectedTab: .settings)
                 }
 
-                MenuRowButton(title: tr("Welcome Guide…"), icon: "sparkles") {
-                    OnboardingWindowController.shared.show(restart: true)
+                MenuRowButton(title: tr("Check for Updates…"), icon: "arrow.triangle.2.circlepath") {
+                    Task { await updater.checkForUpdates(userInitiated: true) }
                 }
 
-                MenuRowButton(title: tr("Star on GitHub"), icon: "star") {
-                    NSWorkspace.shared.open(AppInfo.repositoryURL)
+                MenuRowButton(title: tr("Setup Assistant…"), icon: "macwindow") {
+                    OnboardingWindowController.shared.show(restart: true)
                 }
 
                 Divider()
