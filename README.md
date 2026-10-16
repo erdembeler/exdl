@@ -34,13 +34,9 @@ A Mac's internal storage can't be upgraded, and large apps — Xcode, Docker, Un
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A["Disk image<br/>(.dmg)"] -->|"1 · EXdl detects it"| B["EXdl"]
-    B -->|"2 · copies the app"| C[("External drive<br/>full app")]
-    B -->|"3 · adds a launcher"| D["/Applications<br/>launcher"]
-    D -.->|"opens"| C
-```
+<p align="center">
+  <img src="assets/how-it-works.svg" width="720" alt="EXdl detects a mounted disk image, copies the app to the external drive and adds a small launcher to /Applications that opens it from the drive">
+</p>
 
 EXdl doesn't rely on symbolic links. For every app it installs, it places a small launcher bundle in `/Applications` that carries the original icon and metadata, so Launchpad, Spotlight and the Dock treat it like any other app. Opening it starts the real app from your drive — or asks you to reconnect the drive if it isn't available.
 
