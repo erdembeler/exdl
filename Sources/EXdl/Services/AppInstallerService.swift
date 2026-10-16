@@ -330,7 +330,7 @@ final class AppInstallerService: ObservableObject {
         }
 
         // 3. Geçici dizinde Smart App Stub paketini hazırla
-        let tempStubURL = fm.temporaryDirectory.appendingPathComponent("HariciKurStub_\(UUID().uuidString).app")
+        let tempStubURL = fm.temporaryDirectory.appendingPathComponent("EXdlStub_\(UUID().uuidString).app")
         let stubContentsURL = tempStubURL.appendingPathComponent("Contents", isDirectory: true)
         let stubMacOSURL = stubContentsURL.appendingPathComponent("MacOS", isDirectory: true)
         let stubResourcesURL = stubContentsURL.appendingPathComponent("Resources", isDirectory: true)
@@ -362,14 +362,15 @@ final class AppInstallerService: ObservableObject {
 
         // 5. Info.plist değerlerini vekil paket için yapılandır
         let originalBundleID = (infoDict["CFBundleIdentifier"] as? String) ?? "app.\(stubURL.deletingPathExtension().lastPathComponent)"
-        let launcherName = "HariciKurStubLauncher"
+        let launcherName = "EXdlStubLauncher"
 
         infoDict["CFBundleExecutable"] = launcherName
-        infoDict["CFBundleIdentifier"] = "com.erdem.haricikur.stub.\(originalBundleID)"
+        infoDict["CFBundleIdentifier"] = "com.erdem.exdl.stub.\(originalBundleID)"
         infoDict["CFBundlePackageType"] = "APPL"
-        infoDict["HariciKurIsStub"] = true
+        infoDict["EXdlIsStub"] = true
+        infoDict["EXdlTargetAppPath"] = destinationURL.path
         infoDict["HariciKurTargetAppPath"] = destinationURL.path
-        infoDict["HariciKurOriginalBundleIdentifier"] = originalBundleID
+        infoDict["EXdlOriginalBundleIdentifier"] = originalBundleID
         infoDict.removeValue(forKey: "NSPrincipalClass")
         infoDict.removeValue(forKey: "LSEnvironment")
 
@@ -382,7 +383,9 @@ final class AppInstallerService: ObservableObject {
 
         // 6. Başlatıcı (Launcher) Mach-O binary'sini kopyala veya oluştur
         let stubExecutableURL = stubMacOSURL.appendingPathComponent(launcherName)
-        if let bundledLauncherURL = Bundle.main.url(forResource: "HariciKurStubLauncher", withExtension: nil),
+        let bundledLauncherURL = Bundle.main.url(forResource: "EXdlStubLauncher", withExtension: nil)
+            ?? Bundle.main.url(forResource: "HariciKurStubLauncher", withExtension: nil)
+        if let bundledLauncherURL = bundledLauncherURL,
            fm.fileExists(atPath: bundledLauncherURL.path) {
             try fm.copyItem(at: bundledLauncherURL, to: stubExecutableURL)
         } else {

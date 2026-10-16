@@ -70,7 +70,7 @@ enum DiskImageHelper {
         return fileType == .typeSymbolicLink
     }
 
-    /// Bir .app paketinin HariciKur tarafından oluşturulmuş Akıllı Kısayol Paketi (Smart App Stub)
+    /// Bir .app paketinin EXdl tarafından oluşturulmuş Akıllı Kısayol Paketi (Smart App Stub)
     /// VEYA POSIX sembolik link olup olmadığını kontrol eder.
     static func isExternalAppLink(at url: URL) -> Bool {
         if isSymbolicLink(at: url) {
@@ -83,12 +83,12 @@ enum DiskImageHelper {
         return stubTargetURL(for: url) != nil
     }
 
-    /// HariciKur Smart App Stub (.app) içindeki Info.plist'ten hedef harici disk yolunu okur
+    /// EXdl Smart App Stub (.app) içindeki Info.plist'ten hedef harici disk yolunu okur
     static func stubTargetURL(for url: URL) -> URL? {
         let infoPlistURL = url.appendingPathComponent("Contents/Info.plist")
         guard let data = try? Data(contentsOf: infoPlistURL),
               let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
-              let targetPath = plist["HariciKurTargetAppPath"] as? String,
+              let targetPath = (plist["EXdlTargetAppPath"] as? String) ?? (plist["HariciKurTargetAppPath"] as? String),
               !targetPath.isEmpty else {
             return nil
         }

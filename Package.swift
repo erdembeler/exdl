@@ -13,7 +13,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "EXdl",
-            path: "Sources/HariciKur"
+            path: "Sources/EXdl"
         ),
         .executableTarget(
             name: "EXdlStubLauncher",

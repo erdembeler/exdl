@@ -5,7 +5,9 @@ import AppKit
 struct StubLauncher {
     static func main() {
         let info = Bundle.main.infoDictionary ?? [:]
-        let targetPath = (info["HariciKurTargetAppPath"] as? String) ?? ""
+        let targetPath = (info["EXdlTargetAppPath"] as? String)
+            ?? (info["HariciKurTargetAppPath"] as? String)
+            ?? ""
         let appName = (info["CFBundleDisplayName"] as? String)
             ?? (info["CFBundleName"] as? String)
             ?? Bundle.main.bundleURL.deletingPathExtension().lastPathComponent

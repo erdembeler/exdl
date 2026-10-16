@@ -40,6 +40,8 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp ".build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
+cp ".build/release/EXdlStubLauncher" "$RESOURCES_DIR/EXdlStubLauncher"
+chmod +x "$RESOURCES_DIR/EXdlStubLauncher"
 cp ".build/release/EXdlStubLauncher" "$RESOURCES_DIR/HariciKurStubLauncher"
 chmod +x "$RESOURCES_DIR/HariciKurStubLauncher"
 
@@ -80,6 +82,7 @@ EOF
 
 # 2. Hardened Runtime ve Developer ID ile İmzala
 echo "🔏 2/5: Hardened Runtime ile kod imzalanıyor..."
+codesign --force --options runtime --timestamp --sign "$IDENTITY" "$RESOURCES_DIR/EXdlStubLauncher"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$RESOURCES_DIR/HariciKurStubLauncher"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
 

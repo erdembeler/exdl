@@ -22,6 +22,8 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp ".build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
+cp ".build/release/EXdlStubLauncher" "$RESOURCES_DIR/EXdlStubLauncher"
+chmod +x "$RESOURCES_DIR/EXdlStubLauncher"
 cp ".build/release/EXdlStubLauncher" "$RESOURCES_DIR/HariciKurStubLauncher"
 chmod +x "$RESOURCES_DIR/HariciKurStubLauncher"
 
