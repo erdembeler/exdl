@@ -13,7 +13,7 @@
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
-[**Download**](https://github.com/erdembeler/exdl/releases/latest) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Build from source](#build-from-source)
+[**Download**](https://github.com/erdembeler/exdl/releases/latest) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Build from source](#build-from-source) &nbsp;·&nbsp; [⭐ Star](https://github.com/erdembeler/exdl)
 
 </div>
 
@@ -75,6 +75,10 @@ cd exdl
 ```
 
 `notarize.sh` needs a *Developer ID Application* certificate and a `notarytool` keychain profile; set `TEAM_ID` and `KEYCHAIN_PROFILE` at the top of the script. The installer image is built with [dmgbuild](https://github.com/dmgbuild/dmgbuild), which the scripts install into `.build/` on first run (Python 3 and network access required).
+
+## Support
+
+If EXdl keeps your Mac's SSD free, please **[give it a star on GitHub](https://github.com/erdembeler/exdl)** — it's the simplest way to help other people find the project. Bug reports and ideas are welcome in [Issues](https://github.com/erdembeler/exdl/issues).
 
 ## License
 
