@@ -12,6 +12,7 @@
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#requirements)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#install)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
 [**Download**](https://github.com/erdembeler/exdl/releases/latest) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Build from source](#build-from-source)
 
@@ -78,4 +79,4 @@ cd exdl
 
 ## License
 
-Released under the MIT License.
+Released under the [MIT License](LICENSE).
