@@ -21,7 +21,6 @@ VERSION="1.0.0"
 APP_NAME="EXdl"
 DMG_NAME="EXdl-$VERSION.dmg"
 OUTPUT_DIR="$SCRIPT_DIR/dist"
-STAGE_DIR="$SCRIPT_DIR/.build/dmg_stage"
 
 # 1. Swift ile Derleme
 echo "🔨 1/5: EXdl derleniyor..."
@@ -88,15 +87,9 @@ codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
 
 # 3. Dağıtım DMG'sini Hazırla ve İmzala
 echo "📦 3/5: Dağıtım DMG'si oluşturuluyor ve imzalanıyor..."
-rm -rf "$STAGE_DIR"
-mkdir -p "$STAGE_DIR"
-cp -R "$APP_BUNDLE" "$STAGE_DIR/$APP_NAME.app"
-ln -s /Applications "$STAGE_DIR/Applications"
-
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/$DMG_NAME"
-hdiutil create -volname "EXdl" -srcfolder "$STAGE_DIR" -ov -format UDZO "$OUTPUT_DIR/$DMG_NAME"
-rm -rf "$STAGE_DIR"
+./make_dmg.sh "$APP_BUNDLE" "$OUTPUT_DIR/$DMG_NAME"
 
 codesign --force --timestamp --sign "$IDENTITY" "$OUTPUT_DIR/$DMG_NAME"
 
