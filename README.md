@@ -2,9 +2,8 @@
 
 <img src="assets/icon.png" width="128" height="128" alt="EXdl icon">
 
-# EXdl
-
-**Install Mac apps straight onto an external drive —<br>and keep them in Launchpad and Spotlight.**
+# EXdl <br><h3>External Downloader
+**Install Mac apps straight onto an external drive <br>and keep them in Launchpad and Spotlight.**
 
 <br>
 
