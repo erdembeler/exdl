@@ -219,5 +219,30 @@ enum TurkishStrings {
         "{app} update restored automatically": "{app} güncellemesi otomatik olarak onarıldı",
         "The updated version was moved back to the external drive and the launcher was recreated.": "Güncellenen sürüm tekrar harici diske taşındı ve başlatıcı yenilendi.",
         "{app} could not be restored automatically": "{app} otomatik olarak onarılamadı",
+
+        // Incompatible app filtering
+        "Internal Only": "Dahili Disk Gerekli",
+        "Requires internal disk": "Dahili disk gerektirir",
+        "Developer toolchain requires internal disk": "Geliştirici araç zinciri dahili disk gerektirir",
+        "Apple system app requires internal disk": "Apple sistem uygulaması dahili disk gerektirir",
+        "Contains macOS System Extension": "macOS Sistem Uzantısı içerir",
+        "Contains system kernel extension": "Sistem çekirdek uzantısı içerir",
+        "Contains privileged background service": "Yetkili arka plan servisi içerir",
+        "Contains background login service": "Oturum açılışı arka plan servisi içerir",
+        "System service requires internal disk": "Sistem servisi dahili disk gerektirir",
+
+        // Menu Bar Icon Picker
+        "Menu Bar Icon": "Menü Çubuğu İkonu",
+        "Choose the icon displayed in the macOS menu bar:": "macOS üst menü çubuğunda görünecek ikonu seçin:",
+        "1. Minimal SSD & Arrow": "1. Minimal SSD ve Ok",
+        "2. Portable NVMe & USB-C": "2. Taşınabilir NVMe",
+        "3. EX Monogram Badge": "3. EX Rozet",
+        "4. Solid Perspective Drive": "4. Perspektif Disk",
+        "5. Dual Stacked Drives": "5. Çift Katmanlı Disk",
+        "6. App & Drive Dock": "6. Uygulama ve Disk",
+        "7. High-Speed NVMe Pill": "7. Hızlı NVMe Kapsül",
+        "8. Isometric 3D Block": "8. İzometrik 3B Küp",
+        "9. Disk Ring & Arrow": "9. Disk Halkası ve Ok",
+        "10. Clean Outlined Drive": "10. Çizgisel Disk",
     ]
 }

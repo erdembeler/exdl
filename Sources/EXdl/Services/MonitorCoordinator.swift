@@ -124,6 +124,9 @@ final class MonitorCoordinator: ObservableObject {
 
             var items: [InstalledAppInfo] = []
             for url in urls where url.pathExtension.lowercased() == "app" {
+                if DiskImageHelper.shouldHideFromAppList(at: url) {
+                    continue
+                }
                 let name = url.deletingPathExtension().lastPathComponent
                 let isExt = DiskImageHelper.isExternalAppLink(at: url)
                 let extTarget = DiskImageHelper.externalTargetURL(for: url)
@@ -134,10 +137,10 @@ final class MonitorCoordinator: ObservableObject {
                     reachable = true
                 }
                 let size = reachable ? DiskImageHelper.calculateBundleSize(at: url) : 0
-                // EXdl itself must never be offered for moving to the drive.
                 let lowerName = name.lowercased()
                 let isSystem = url.path.hasPrefix("/System/") || name == "Safari"
                     || lowerName.contains("exdl") || lowerName.contains("haricikur")
+                let incompReason = DiskImageHelper.incompatibilityReason(for: url)
 
                 let plistURL = url.appendingPathComponent("Contents/Info.plist")
                 let version: String?
@@ -157,7 +160,8 @@ final class MonitorCoordinator: ObservableObject {
                         isSymlink: isExt,
                         symlinkTargetURL: extTarget,
                         isTargetReachable: reachable,
-                        isSystemApp: isSystem
+                        isSystemApp: isSystem,
+                        incompatibilityReason: incompReason
                     )
                 )
             }
@@ -165,6 +169,9 @@ final class MonitorCoordinator: ObservableObject {
             return items.sorted { a, b in
                 if a.isSymlink != b.isSymlink {
                     return a.isSymlink && !b.isSymlink
+                }
+                if a.isMovableToExternal != b.isMovableToExternal {
+                    return a.isMovableToExternal && !b.isMovableToExternal
                 }
                 return a.sizeInBytes > b.sizeInBytes
             }
@@ -243,7 +250,8 @@ final class MonitorCoordinator: ObservableObject {
                 let minBytes = Int64(AppSettings.shared.minimumAppSizeMB * 1_048_576.0)
                 for item in detected
                 where !AppSettings.shared.ignoredBundleNames.contains(item.appBundleURL.lastPathComponent)
-                    && item.sizeInBytes >= minBytes {
+                    && item.sizeInBytes >= minBytes
+                    && DiskImageHelper.incompatibilityReason(for: item.appBundleURL) == nil {
                     enqueuePrompt(item)
                 }
             }
@@ -268,6 +276,7 @@ final class MonitorCoordinator: ObservableObject {
         for appURL in appURLs {
             let bundleName = appURL.lastPathComponent
             if settings.ignoredBundleNames.contains(bundleName) { continue }
+            if DiskImageHelper.incompatibilityReason(for: appURL) != nil { continue }
 
             let size = await Task.detached { DiskImageHelper.calculateBundleSize(at: appURL) }.value
             let minBytes = Int64(settings.minimumAppSizeMB * 1_048_576.0)
@@ -378,6 +387,7 @@ final class MonitorCoordinator: ObservableObject {
 
                 let copyDone = await DiskImageHelper.waitForCopyCompletion(at: appURL)
                 guard copyDone, !DiskImageHelper.isExternalAppLink(at: appURL) else { continue }
+                if DiskImageHelper.incompatibilityReason(for: appURL) != nil { continue }
 
                 pendingPrompts.removeAll { $0.appBundleURL.lastPathComponent == bundleName }
 

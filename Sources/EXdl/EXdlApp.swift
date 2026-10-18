@@ -57,19 +57,16 @@ struct EXdlApp: App {
             MenuBarView()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: menuBarIconName)
+                Image(nsImage: MenuBarIconGenerator.image(
+                    style: settings.menuBarIconStyle,
+                    isMonitoringEnabled: settings.isMonitoringEnabled,
+                    hasPendingPrompt: !coordinator.pendingPrompts.isEmpty
+                ))
                 if !coordinator.pendingPrompts.isEmpty {
                     Text("\(coordinator.pendingPrompts.count)")
                 }
             }
         }
         .menuBarExtraStyle(.window)
-    }
-
-    private var menuBarIconName: String {
-        if !coordinator.pendingPrompts.isEmpty {
-            return "externaldrive.fill.badge.exclamationmark"
-        }
-        return settings.isMonitoringEnabled ? "externaldrive.fill.badge.checkmark" : "externaldrive"
     }
 }

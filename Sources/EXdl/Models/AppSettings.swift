@@ -64,6 +64,15 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(Array(ignoredBundleNames), forKey: "ignoredBundleNames") }
     }
 
+    @Published var menuBarIconStyleRaw: Int {
+        didSet { UserDefaults.standard.set(menuBarIconStyleRaw, forKey: "menuBarIconStyleRaw") }
+    }
+
+    var menuBarIconStyle: MenuBarIconStyle {
+        get { MenuBarIconStyle(rawValue: menuBarIconStyleRaw) ?? .exMonogram }
+        set { menuBarIconStyleRaw = newValue.rawValue }
+    }
+
     @Published var availableExternalDrives: [ExternalDriveInfo] = []
     @Published var internalDrive: ExternalDriveInfo = ExternalDriveInfo(
         name: "Macintosh HD",
@@ -84,7 +93,8 @@ final class AppSettings: ObservableObject {
             "minimumAppSizeMB": 0.0,
             "autoEjectDMGAfterInstall": true,
             "moveDMGToTrashAfterInstall": false,
-            "externalApplicationsPath": ""
+            "externalApplicationsPath": "",
+            "menuBarIconStyleRaw": MenuBarIconStyle.exMonogram.rawValue
         ])
 
         self.isMonitoringEnabled = defaults.bool(forKey: "isMonitoringEnabled")
@@ -99,6 +109,8 @@ final class AppSettings: ObservableObject {
         self.managedSymlinks = (defaults.dictionary(forKey: "managedSymlinks") as? [String: String]) ?? [:]
         let ignoredArray = defaults.stringArray(forKey: "ignoredBundleNames") ?? []
         self.ignoredBundleNames = Set(ignoredArray)
+        let savedIconStyle = defaults.integer(forKey: "menuBarIconStyleRaw")
+        self.menuBarIconStyleRaw = (1...10).contains(savedIconStyle) ? savedIconStyle : MenuBarIconStyle.exMonogram.rawValue
 
         refreshExternalDrives()
         refreshLaunchAtLogin()

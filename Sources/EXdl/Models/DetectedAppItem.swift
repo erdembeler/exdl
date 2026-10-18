@@ -80,7 +80,12 @@ struct InstalledAppInfo: Identifiable, Equatable {
     let symlinkTargetURL: URL?
     let isTargetReachable: Bool
     let isSystemApp: Bool
+    let incompatibilityReason: String?
     let icon: NSImage
+
+    var isMovableToExternal: Bool {
+        !isSystemApp && incompatibilityReason == nil
+    }
 
     init(
         name: String,
@@ -90,7 +95,8 @@ struct InstalledAppInfo: Identifiable, Equatable {
         isSymlink: Bool,
         symlinkTargetURL: URL?,
         isTargetReachable: Bool,
-        isSystemApp: Bool
+        isSystemApp: Bool,
+        incompatibilityReason: String? = nil
     ) {
         self.name = name
         self.version = version
@@ -100,6 +106,7 @@ struct InstalledAppInfo: Identifiable, Equatable {
         self.symlinkTargetURL = symlinkTargetURL
         self.isTargetReachable = isTargetReachable
         self.isSystemApp = isSystemApp
+        self.incompatibilityReason = incompatibilityReason
 
         if isSymlink, let target = symlinkTargetURL, isTargetReachable {
             self.icon = NSWorkspace.shared.icon(forFile: target.path)

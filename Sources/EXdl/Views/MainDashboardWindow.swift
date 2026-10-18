@@ -244,6 +244,10 @@ struct ApplicationsManagerTabView: View {
                                      : tr("Drive Not Connected"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(app.isTargetReachable ? Color.accentColor : Color.orange)
+                            } else if let reason = app.incompatibilityReason {
+                                Text("\(tr("Internal Disk")) · \(reason)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
                             } else {
                                 Text(tr("Internal Disk"))
                                     .font(.system(size: 11))
@@ -264,12 +268,27 @@ struct ApplicationsManagerTabView: View {
                             }
                             .controlSize(.small)
                             .disabled(installer.isBusy || !app.isTargetReachable)
-                        } else {
+                        } else if app.isMovableToExternal {
                             Button(tr("Move to External…")) {
                                 moveAppToExternal(app)
                             }
                             .controlSize(.small)
-                            .disabled(installer.isBusy || !settings.isExternalTargetReady || app.isSystemApp)
+                            .disabled(installer.isBusy || !settings.isExternalTargetReady)
+                        } else {
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 10))
+                                Text(tr("Internal Only"))
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.06))
+                            )
+                            .help(app.incompatibilityReason ?? tr("Requires internal disk"))
                         }
                     }
                     .padding(.vertical, 2)
@@ -562,6 +581,52 @@ struct SettingsAndPermissionsTabView: View {
                         .controlSize(.small)
                     }
                 }
+            }
+
+            Section(tr("Menu Bar Icon")) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(tr("Choose the icon displayed in the macOS menu bar:"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                        ForEach(MenuBarIconStyle.allCases) { style in
+                            let isSelected = settings.menuBarIconStyle == style
+                            Button {
+                                settings.menuBarIconStyle = style
+                            } label: {
+                                VStack(spacing: 5) {
+                                    Image(nsImage: MenuBarIconGenerator.image(
+                                        style: style,
+                                        isMonitoringEnabled: settings.isMonitoringEnabled,
+                                        pointSize: 20
+                                    ))
+                                        .frame(height: 24)
+                                    Text("#\(style.rawValue)")
+                                        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                                    Text(style.title)
+                                        .font(.system(size: 9.5))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 4)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.04))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
             }
 
             Section(tr("Language")) {

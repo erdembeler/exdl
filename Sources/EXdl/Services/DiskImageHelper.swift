@@ -177,4 +177,107 @@ enum DiskImageHelper {
         }
         return FileManager.default.fileExists(atPath: appURL.path)
     }
+
+    // MARK: - Harici Disk Uyumluluk Denetimi (Incompatible App Filtering)
+
+    /// EXdl'in kendisi ve macOS sistem kripteks kısayolları (Safari vb.) uygulama listesinde hiç gösterilmez.
+    static func shouldHideFromAppList(at bundleURL: URL) -> Bool {
+        let name = bundleURL.deletingPathExtension().lastPathComponent
+        let lowerName = name.lowercased()
+        if bundleURL.path.hasPrefix("/System/") || lowerName == "safari" || lowerName == "exdl" || lowerName == "haricikur" {
+            return true
+        }
+        if isSymbolicLink(at: bundleURL) && !isExternalAppLink(at: bundleURL) {
+            return true
+        }
+        return false
+    }
+
+    /// Harici diske taşındığında (ve /Applications içinde vekil paket bırakıldığında) sorun çıkaracak
+    /// uygulamaları tespit eder ve nedenini döndürür. Uygun (taşınabilir) uygulamalar için `nil` döner.
+    static func incompatibilityReason(for bundleURL: URL) -> String? {
+        if shouldHideFromAppList(at: bundleURL) {
+            return tr("Requires internal disk")
+        }
+
+        // Zaten harici diskte olan bir uygulama ise geri alınabilmesi için engelleme
+        if isExternalAppLink(at: bundleURL) {
+            return nil
+        }
+
+        let fm = FileManager.default
+        let contentsURL = bundleURL.appendingPathComponent("Contents", isDirectory: true)
+        let infoPlistURL = contentsURL.appendingPathComponent("Info.plist")
+
+        var bundleID = ""
+        if let data = try? Data(contentsOf: infoPlistURL),
+           let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+            bundleID = (plist["CFBundleIdentifier"] as? String)?.lowercased() ?? ""
+        }
+
+        let lowerName = bundleURL.deletingPathExtension().lastPathComponent.lowercased()
+
+        // 1. Xcode ve Geliştirici Araç Zinciri (xcode-select, xcrun, simctl, CoreSimulator /Applications/Xcode.app yolunu zorunlu kılar)
+        if bundleID == "com.apple.dt.xcode"
+            || lowerName == "xcode"
+            || lowerName.hasPrefix("xcode-")
+            || fm.fileExists(atPath: contentsURL.appendingPathComponent("Developer").path) {
+            return tr("Developer toolchain requires internal disk")
+        }
+
+        // 2. Apple Sistem ve App Store Araçları (com.apple.*)
+        if bundleID.hasPrefix("com.apple.") {
+            return tr("Apple system app requires internal disk")
+        }
+
+        // 3. macOS Sistem Uzantıları (SystemExtensions / DriverKit / NetworkExtension)
+        // macOS sysextd yalnızca dahili /Applications dizinindeki sistem uzantılarını yükler.
+        let sysExtURL = contentsURL.appendingPathComponent("Library/SystemExtensions", isDirectory: true)
+        if let items = try? fm.contentsOfDirectory(atPath: sysExtURL.path), !items.isEmpty {
+            return tr("Contains macOS System Extension")
+        }
+
+        let kextURL = contentsURL.appendingPathComponent("Library/Extensions", isDirectory: true)
+        if let items = try? fm.contentsOfDirectory(atPath: kextURL.path), !items.isEmpty {
+            return tr("Contains system kernel extension")
+        }
+
+        // 4. Yetkili Arka Plan Servisleri (SMJobBless / LaunchServices / Daemons)
+        let launchServicesURL = contentsURL.appendingPathComponent("Library/LaunchServices", isDirectory: true)
+        if let items = try? fm.contentsOfDirectory(atPath: launchServicesURL.path), !items.isEmpty {
+            return tr("Contains privileged background service")
+        }
+
+        // 5. Gömülü Oturum Açılışı Servisleri (LoginItems) ve Donanım/Sanallaştırma Sürücüleri
+        let loginItemsURL = contentsURL.appendingPathComponent("Library/LoginItems", isDirectory: true)
+        if let items = try? fm.contentsOfDirectory(atPath: loginItemsURL.path), !items.isEmpty {
+            return tr("Contains background login service")
+        }
+
+        let internalOnlyPrefixes: [String] = [
+            "com.docker.",
+            "org.pqrs.karabiner",
+            "pro.betterdisplay.",
+            "com.nuebling.mac-mouse-fix",
+            "com.if.amphetamine",
+            "com.1password.",
+            "com.agilebits.",
+            "com.raycast.",
+            "com.runningwithcrayons.alfred",
+            "at.obdev.littlesnitch",
+            "com.objective-see.",
+            "com.rogueamoeba.",
+            "io.tailscale.",
+            "com.wireguard.",
+            "com.cloudflare.1dot1dot1dot1",
+            "com.parallels.desktop",
+            "com.vmware.fusion",
+            "org.virtualbox.app"
+        ]
+        if internalOnlyPrefixes.contains(where: { bundleID.hasPrefix($0) }) {
+            return tr("System service requires internal disk")
+        }
+
+        return nil
+    }
 }
