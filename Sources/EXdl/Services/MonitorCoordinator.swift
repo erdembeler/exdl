@@ -216,13 +216,35 @@ final class MonitorCoordinator: ObservableObject {
             forName: NSWorkspace.didUnmountNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            let unmountedURL = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.removePromptsForUnmountedVolume(unmountedURL)
                 AppSettings.shared.refreshExternalDrives()
                 self.refreshMountedDMGs()
                 await self.scanInstalledApplications()
             }
+        }
+    }
+
+    /// Removes any pending install prompts whose source DMG was unmounted or no longer exists,
+    /// and closes the prompt window if no prompts remain.
+    private func removePromptsForUnmountedVolume(_ unmountedURL: URL?) {
+        let beforeCount = pendingPrompts.count
+        pendingPrompts.removeAll { prompt in
+            switch prompt.source {
+            case .mountedDMG(let volURL, _):
+                if let unmountedURL, volURL.standardizedFileURL.path == unmountedURL.standardizedFileURL.path {
+                    return true
+                }
+                return !FileManager.default.fileExists(atPath: prompt.appBundleURL.path)
+            case .applicationsFolder, .symlinkOverwrittenByUpdate:
+                return !FileManager.default.fileExists(atPath: prompt.appBundleURL.path)
+            }
+        }
+        if pendingPrompts.isEmpty && beforeCount > 0 {
+            InstallPromptPanelController.shared.close()
         }
     }
 
@@ -246,6 +268,7 @@ final class MonitorCoordinator: ObservableObject {
                 }
             }
             self.mountedDMGApps = detected
+            self.removePromptsForUnmountedVolume(nil)
             if enqueueIfInitial, AppSettings.shared.isMonitoringEnabled, AppSettings.shared.watchMountedDMGs {
                 let minBytes = Int64(AppSettings.shared.minimumAppSizeMB * 1_048_576.0)
                 for item in detected
@@ -261,6 +284,7 @@ final class MonitorCoordinator: ObservableObject {
     private func handleMountedVolume(_ volumeURL: URL) async {
         let settings = AppSettings.shared
         guard settings.isMonitoringEnabled, settings.watchMountedDMGs else { return }
+        guard volumeURL.path.hasPrefix("/Volumes/") else { return }
 
         try? await Task.sleep(nanoseconds: 400_000_000)
 
@@ -274,11 +298,13 @@ final class MonitorCoordinator: ObservableObject {
         guard dmgFilePath != nil else { return }
 
         for appURL in appURLs {
+            guard FileManager.default.fileExists(atPath: appURL.path) else { continue }
             let bundleName = appURL.lastPathComponent
             if settings.ignoredBundleNames.contains(bundleName) { continue }
             if DiskImageHelper.incompatibilityReason(for: appURL) != nil { continue }
 
             let size = await Task.detached { DiskImageHelper.calculateBundleSize(at: appURL) }.value
+            guard FileManager.default.fileExists(atPath: appURL.path) else { continue }
             let minBytes = Int64(settings.minimumAppSizeMB * 1_048_576.0)
             if size < minBytes { continue }
 

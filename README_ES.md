@@ -19,7 +19,7 @@
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#requisitos-del-sistema)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#requisitos-del-sistema)
-[![Versión](https://img.shields.io/badge/Versi%C3%B3n-v1.1.0-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
+[![Versión](https://img.shields.io/badge/Versi%C3%B3n-v1.1.1-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#instalación)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![Licencia MIT](https://img.shields.io/badge/Licencia-MIT-yellow?style=flat-square)](LICENSE)
@@ -99,7 +99,7 @@ macOS requiere los siguientes permisos de privacidad para el correcto funcionami
 
 ## Instalación
 
-1. Descarga la versión más reciente desde la página de [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) (`EXdl-1.1.0.dmg` o `EXdl-1.1.0.zip`).
+1. Descarga la versión más reciente desde la página de [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) (`EXdl-1.1.1.dmg` o `EXdl-1.1.1.zip`).
 2. Abre la imagen de disco y arrastra **EXdl** a la carpeta **Applications**.
 3. Inicia EXdl. El asistente inicial te guiará en la selección del idioma, el disco externo de destino y la concesión de permisos.
 4. Tras completar el asistente, EXdl permanecerá activo en la barra superior de menús.

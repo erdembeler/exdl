@@ -19,7 +19,7 @@
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#gereksinimler)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#gereksinimler)
-[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v1.1.0-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
+[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v1.1.1-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#kurulum)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![MIT Lisansı](https://img.shields.io/badge/Lisans-MIT-yellow?style=flat-square)](LICENSE)
@@ -99,7 +99,7 @@ EXdl'in görevini eksiksiz yerine getirebilmesi için macOS tarafından sağlana
 
 ## Kurulum
 
-1. [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) sayfasından en son sürümü indirin (`EXdl-1.1.0.dmg` veya `EXdl-1.1.0.zip`).
+1. [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) sayfasından en son sürümü indirin (`EXdl-1.1.1.dmg` veya `EXdl-1.1.1.zip`).
 2. İndirilen DMG dosyasını açın ve **EXdl** uygulamasını **Applications** klasörüne sürükleyin.
 3. EXdl'i başlatın. İlk çalıştırma yardımcısı dil seçimi, hedef harici disk ve izin adımlarında size rehberlik edecektir.
 4. Kurulum tamamlandıktan sonra EXdl ekranınızın sağ üst menü çubuğunda çalışmaya başlayacaktır.

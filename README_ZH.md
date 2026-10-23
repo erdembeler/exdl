@@ -19,7 +19,7 @@
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#系统要求)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#系统要求)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.1.1-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#安装方法)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
@@ -99,7 +99,7 @@ EXdl 摒弃了脆弱的传统符号链接，采用独创的**智能应用启动�
 
 ## 安装方法
 
-1. 前往 [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) 页面下载最新安装包（`EXdl-1.1.0.dmg` 或 `EXdl-1.1.0.zip`）。
+1. 前往 [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) 页面下载最新安装包（`EXdl-1.1.1.dmg` 或 `EXdl-1.1.1.zip`）。
 2. 打开 DMG 镜像并将 **EXdl** 拖入 **Applications** 文件夹。
 3. 启动 EXdl，初次配置向导将协助你完成语言切换、外置安装目录选择与权限开启。
 4. 完成后，EXdl 将常驻在菜单栏右上角静候使用。

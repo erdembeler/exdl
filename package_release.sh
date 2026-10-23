@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 APP_NAME="EXdl"
 DMG_NAME="$APP_NAME-$VERSION.dmg"
 ZIP_NAME="$APP_NAME-$VERSION.zip"

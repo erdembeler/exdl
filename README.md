@@ -19,7 +19,7 @@
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#requirements)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#requirements)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.1.1-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#install)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
@@ -99,7 +99,7 @@ macOS requires specific privacy permissions for EXdl to operate properly:
 
 ## Installation
 
-1. Download the latest release from the [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) page (`EXdl-1.1.0.dmg` or `EXdl-1.1.0.zip`).
+1. Download the latest release from the [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) page (`EXdl-1.1.1.dmg` or `EXdl-1.1.1.zip`).
 2. Open the disk image and drag **EXdl** into **Applications**.
 3. Launch EXdl. The Setup Assistant will guide you through language selection, target drive configuration, and required permissions.
 4. Once completed, EXdl lives unobtrusively in your macOS menu bar.

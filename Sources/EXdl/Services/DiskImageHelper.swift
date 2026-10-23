@@ -31,7 +31,9 @@ enum DiskImageHelper {
                 let imagePath = (image["image-path"] as? String) ?? ""
                 guard let entities = image["system-entities"] as? [[String: Any]] else { continue }
                 for entity in entities {
-                    if let mountPoint = entity["mount-point"] as? String, !mountPoint.isEmpty {
+                    if let mountPoint = entity["mount-point"] as? String,
+                       !mountPoint.isEmpty,
+                       isUserFacingDMGMount(mountPoint: mountPoint, imagePath: imagePath) {
                         result[mountPoint] = imagePath
                     }
                 }
@@ -40,6 +42,45 @@ enum DiskImageHelper {
         } catch {
             return [:]
         }
+    }
+
+    /// Filters out hidden/temporary disk images mounted by background updaters
+    /// (such as Google Omaha/Keystone, Sparkle, or in-app updaters using `-nobrowse`).
+    static func isUserFacingDMGMount(mountPoint: String, imagePath: String) -> Bool {
+        // 1. User-mounted DMGs are always mounted under /Volumes/
+        guard mountPoint.hasPrefix("/Volumes/") else {
+            return false
+        }
+
+        let volumeName = (mountPoint as NSString).lastPathComponent.lowercased()
+        if volumeName.hasPrefix(".") || volumeName.hasPrefix("omahamount") || volumeName.hasPrefix("sparkle") {
+            return false
+        }
+
+        // 2. Ignore DMGs stored in system/app temporary or background updater directories
+        let lowerImage = imagePath.lowercased()
+        let transientFragments = [
+            "/private/var/folders/",
+            "/var/folders/",
+            "/private/tmp/",
+            "/tmp/",
+            "/library/caches/",
+            "/googleupdater/",
+            "/ksinstallaction",
+            "/keystone/"
+        ]
+        if transientFragments.contains(where: { lowerImage.contains($0) }) {
+            return false
+        }
+
+        // 3. Background updaters mount DMGs with `-nobrowse` (`volumeIsBrowsable == false`)
+        let volURL = URL(fileURLWithPath: mountPoint, isDirectory: true)
+        if let values = try? volURL.resourceValues(forKeys: [.volumeIsBrowsableKey]),
+           values.volumeIsBrowsable == false {
+            return false
+        }
+
+        return true
     }
 
     /// Verilen bir DMG mount dizini içindeki .app paketlerini bulur

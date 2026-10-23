@@ -19,7 +19,7 @@
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple&logoColor=white)](#システム要件)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?style=flat-square)](#システム要件)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.1.1-blue?style=flat-square)](https://github.com/erdembeler/exdl/releases/latest)
 [![Notarized](https://img.shields.io/badge/Apple-notarized-34C759?style=flat-square)](#インストール方法)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
@@ -99,7 +99,7 @@ EXdlが正常に動作するために、macOSの以下のプライバシー権�
 
 ## インストール方法
 
-1. [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) ページから最新版（`EXdl-1.1.0.dmg` または `EXdl-1.1.0.zip`）をダウンロードします。
+1. [GitHub Releases](https://github.com/erdembeler/exdl/releases/latest) ページから最新版（`EXdl-1.1.1.dmg` または `EXdl-1.1.1.zip`）をダウンロードします。
 2. ダウンロードしたディスクイメージを開き、**EXdl** を **Applications** フォルダへドラッグします。
 3. EXdlを起動します。初期設定アシスタントに従い、言語設定、保存先ドライブ、権限の付与を行います。
 4. 設定完了後、EXdlはメニューバーに常駐します。
